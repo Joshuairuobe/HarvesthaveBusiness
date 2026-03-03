@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Contact Us | Harvest Havens</title>
+
+  <!-- Optional: remove this if main.css conflicts with your dark theme -->
+  <!-- <link rel="stylesheet" href="main.css"> -->
+</head>
+
+<style>
+:root {
+  --bg:#0b0f0d;
+  --card:#0f1512;
+  --border:rgba(255,255,255,.10);
+  --text:#e7f5ef;
+  --muted:#9fbfb2;
+  --accent:#2e8b57;
+  --accent-glow:rgba(46,139,87,.35);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #123b2a 0%, transparent 50%),
+    radial-gradient(1000px 600px at 110% 10%, #0f2a1e 0%, transparent 45%),
+    var(--bg);
+  color: var(--text);
+}
+
+/* Header */
+header {
+  text-align: center;
+  padding: 90px 20px 60px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,.04), transparent);
+}
+
+header h1 {
+  font-size: clamp(32px, 6vw, 48px);
+  margin-bottom: 14px;
+  letter-spacing: .4px;
+}
+
+header p {
+  max-width: 720px;
+  margin: 10px auto 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* Nav */
+.main-nav ul {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  padding: 0;
+  margin: 20px 0 20px;
+}
+
+.main-nav a {
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: .4px;
+  position: relative;
+  padding-bottom: 6px;
+}
+
+.main-nav a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0%;
+  height: 2px;
+  background: var(--accent);
+  transition: width .25s ease;
+}
+
+.main-nav a:hover::after { width: 100%; }
+
+/* Card */
+.contact-info {
+  max-width: 1100px;
+  margin: 60px auto 90px;
+  padding: 48px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 30px 80px rgba(0,0,0,.65),
+    inset 0 0 0 1px rgba(255,255,255,.04);
+}
+
+.contact-info h2 {
+  text-align: center;
+  font-size: 34px;
+  margin-bottom: 40px;
+  color: #d9fff0;
+}
+
+/* Grid */
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+/* Form */
+.contact-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: .4px;
+}
+
+.contact-form input,
+.contact-form textarea {
+  width: 100%;
+  padding: 14px 14px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  background: #0b0f0d;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  transition: border .2s ease, box-shadow .2s ease, transform .15s ease;
+}
+
+.contact-form input:focus,
+.contact-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.submit-btn {
+  margin-top: 6px;
+  padding: 14px;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(46,139,87,.6);
+  background: linear-gradient(180deg, rgba(46,139,87,.25), rgba(46,139,87,.12));
+  color: #e7fff5;
+  font-weight: 600;
+  letter-spacing: .4px;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, background .2s ease;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(46,139,87,.45);
+  background: linear-gradient(180deg, rgba(46,139,87,.4), rgba(46,139,87,.25));
+}
+
+/* Info */
+.other-contacts h3 {
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.other-contacts p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+
+.social-links {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.social-links a {
+  color: #b7ffe6;
+  font-weight: 600;
+  text-decoration: none;
+  position: relative;
+}
+
+.social-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 0%;
+  height: 2px;
+  background: var(--accent);
+  transition: width .25s ease;
+}
+
+.social-links a:hover::after { width: 100%; }
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 50px 20px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,.03));
+}
+
+footer a {
+  color: #b7ffe6;
+  text-decoration: none;
+}
+
+footer a:hover { text-decoration: underline; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+
+  .contact-info {
+    margin: 40px 16px 70px;
+    padding: 28px;
+  }
+}
+</style>
+
+<body>
+
+<header>
+  <h1>Contact Harvest Havens</h1>
+
+  <nav class="main-nav">
+    <ul>
+      <li><a href="index.html">Menu</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="products.html">Attractions</a></li>
+      <li><a href="events.html">Events</a></li>
+    </ul>
+  </nav>
+
+  <p>
+    Got questions about bookings, events, or the farm experience?  
+    Drop us a message — we’ll get back to you.
+  </p>
+</header>
+
+<section class="contact-info">
+  <h2>Send Us a Message</h2>
+
+  <div class="contact-grid">
+    <form action="submit_form.php" method="POST" class="contact-form">
+      <label>Full Name</label>
+      <input type="text" name="name" placeholder="John Doe" required>
+
+      <label>Email Address</label>
+      <input type="email" name="email" placeholder="you@email.com" required>
+
+      <label>Your Message</label>
+      <textarea name="message" rows="5" placeholder="Tell us what you need..." required></textarea>
+
+      <button class="submit-btn" type="submit">Send Message</button>
+    </form>
+
+    <div class="other-contacts">
+      <h3>Other Ways to Reach Us</h3>
+      <p><strong>Email:</strong> info@harvesthavens.com</p>
+      <p><strong>Phone:</strong> +44 7756 7900</p>
+      <p><strong>Address:</strong><br>
+        Harvest Havens, The Greenfields Farm<br>
+        Lockerbie, Dumfries and Galloway, DG11 2RU<br>
+        United Kingdom
+      </p>
+
+      <ul class="social-links">
+        <li><a href="https://www.facebook.com">Facebook</a></li>
+        <li><a href="https://www.instagram.com">Instagram</a></li>
+        <li><a href="https://www.twitter.com">Twitter</a></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>
+    &copy; 2026 Harvest Havens ·
+    <a href="privacy policy.html">Privacy Policy</a> ·
+    <a href="terms of service.html">Terms of Service</a>
+  </p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin | Harvest Havens Farm</title>
+
+<style>
+:root{--green:#2f6b3f;--bg:#f4f7f5;--card:#fff;--border:#e4e9e6;--muted:#6b7c72;}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#1d2b23}
+.wrap{
+  max-width:1000px;
+  margin:40px auto;
+  background:var(--card);
+  padding:26px;
+  border-radius:20px;
+  box-shadow:0 30px 70px rgba(0,0,0,.08);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+input,select,button{width:100%;padding:12px;margin-top:10px;border-radius:10px;border:1px solid var(--border)}
+button{background:var(--green);color:#fff;font-weight:700;border:none;cursor:pointer}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:18px;background:#fbfdfc}
+.hidden{display:none}
+.slotRow{display:flex;gap:10px;align-items:center;margin:6px 0;flex-wrap:wrap}
+.pill{padding:6px 10px;border-radius:999px;background:#eef3f0;color:var(--green);font-weight:700;font-size:12px}
+.btn2{background:#eef3f0;color:var(--green)}
+.btnDanger{background:#ffe8e8;color:#9b1c1c}
+.small{font-size:13px;color:var(--muted)}
+.booking-card{border:1px solid var(--border);border-radius:12px;padding:10px;margin:8px 0;background:#fff}
+html, body { height: 100%; overflow-y: auto; }
+hr{border:none;border-top:1px solid var(--border);margin:14px 0}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<h2>Harvest Havens Admin</h2>
+
+<!-- LOGIN -->
+<div id="loginBox" class="card">
+  <input id="email" type="email" placeholder="Admin Email" autocomplete="username">
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn">Login / Register</button>
+</div>
+
+<!-- ADMIN -->
+<div id="adminBox" class="hidden">
+
+  <div class="card">
+    <button id="logoutBtn" class="btn2">Logout</button>
+  </div>
+
+  <div class="card">
+    <h3>Manage Events & Attractions</h3>
+
+    <select id="existingItems">
+      <option value="">— Select existing item —</option>
+    </select>
+
+    <div class="row">
+      <select id="type">
+        <option value="event">Event</option>
+        <option value="attraction">Attraction</option>
+      </select>
+      <input id="name" placeholder="Item name">
+    </div>
+
+    <div class="row">
+      <input id="imageFile" type="file" accept="image/*">
+      <input id="capacity" type="number" placeholder="Capacity" min="1">
+    </div>
+
+    <div class="row">
+      <input id="adultPrice" type="number" min="0" step="1" placeholder="Adult (£)">
+      <input id="childPrice" type="number" min="0" step="1" placeholder="Child (£)">
+    </div>
+    <input id="seniorPrice" type="number" min="0" step="1" placeholder="Senior (£)">
+
+    <hr>
+
+    <!-- ✅ WEEKLY (DAY-OF-WEEK) SLOTS -->
+    <h3>Weekly Slots (customers can book on any date)</h3>
+    <p class="small">
+      Choose a weekday, then add slots for that weekday. Bookings will use the selected date’s weekday slots.
+      Use “Date Overrides” below only for special one-off days.
+    </p>
+
+    <div class="row">
+      <select id="slotDay">
+        <option value="mon">Monday</option>
+        <option value="tue">Tuesday</option>
+        <option value="wed">Wednesday</option>
+        <option value="thu">Thursday</option>
+        <option value="fri">Friday</option>
+        <option value="sat">Saturday</option>
+        <option value="sun">Sunday</option>
+      </select>
+
+      <select id="slotPreset">
+        <option value="">Add preset slot</option>
+        <option value="10:00|13:00">Morning (10:00–13:00)</option>
+        <option value="14:00|17:00">Afternoon (14:00–17:00)</option>
+        <option value="18:00|22:00">Evening (18:00–22:00)</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="addSlotBtn" type="button">Add Preset To Selected Weekday</button>
+      <button id="clearDayBtn" type="button" class="btnDanger">Clear Selected Weekday</button>
+    </div>
+
+    <h4 style="margin-top:18px;margin-bottom:6px;">Add a Custom Slot (for selected weekday)</h4>
+    <div class="row">
+      <input id="customStart" type="time">
+      <input id="customEnd" type="time">
+      <button id="addCustomSlot" type="button">Add Custom To Selected Weekday</button>
+    </div>
+
+    <div id="slotList" class="small"></div>
+
+    <hr>
+
+    <!-- ✅ DATE OVERRIDES -->
+    <h3>Date Overrides (optional)</h3>
+    <p class="small">
+      If you add slots for a specific date, they will override weekly slots for that date only.
+    </p>
+
+    <h4 style="margin-top:14px;">Date-specific slots (override)</h4>
+
+    <input id="slotDate" type="date">
+
+    <div class="row">
+      <input id="dateStart" type="time" placeholder="Start">
+      <input id="dateEnd" type="time" placeholder="End">
+    </div>
+
+    <div class="row">
+      <button id="addDateSlotBtn" type="button">Add slot to this date</button>
+      <button id="clearDateSlotsBtn" type="button" class="btnDanger">Clear this date</button>
+    </div>
+
+    <div id="dateSlotList" class="small"></div>
+
+    <hr>
+
+    <button id="saveBtn" type="button">Save Item</button>
+  </div>
+
+  <div class="card" style="margin-bottom:40px;">
+    <h3>📊 Booking Calendar</h3>
+    <input type="date" id="calendarDate">
+    <div id="calendarResults"></div>
+  </div>
+
+  <div class="card">
+    <h3>🟢 Live Attractions</h3>
+    <p class="small">These are pulled live from the database. You can delete or load one into the form.</p>
+    <div id="liveAttractionsList" class="small">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h3>🟢 Live Events</h3>
+    <p class="small">Pulled live from the database. You can delete or load one into the form.</p>
+    <div id="liveEventsList" class="small">Loading…</div>
+  </div>
+
+</div>
+
+<script type="module">
+  
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getDatabase,
+  ref,
+  set,
+  get,
+  child,
+  onValue,
+  remove
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import {
+  getStorage,
+  ref as sRef,
+  uploadBytes,
+  getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+const ADMIN_EMAIL = "harvesthaven10@harvesthaven.com";
+const CLOUD_NAME = "dpdhtdbpu";
+const UPLOAD_PRESET = "harvest_havens_upload";
+/* ✅ Firebase init */
+const app = initializeApp({
+  apiKey: "AIzaSyDjNcMWpJ8zO2j0Z4vH8GOFPHK2Tt8pOF4",
+  authDomain: "harvesthaven-97c9c.firebaseapp.com",
+  databaseURL: "https://harvesthaven-97c9c-default-rtdb.firebaseio.com",
+  projectId: "harvesthaven-97c9c",
+  storageBucket: "harvesthaven-97c9c.firebasestorage.app",
+  messagingSenderId: "917659415383",
+  appId: "1:917659415383:web:6707371353cbeab8424412"
+});
+
+const auth = getAuth(app);
+const rtdb = getDatabase(app);
+const storage = getStorage(app);
+
+/* ✅ DOM refs */
+const loginBox = document.getElementById("loginBox");
+const adminBox = document.getElementById("adminBox");
+const liveAttractionsList = document.getElementById("liveAttractionsList");
+const liveEventsList = document.getElementById("liveEventsList");
+
+const emailEl = document.getElementById("email");
+const passwordEl = document.getElementById("password");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+
+const existingItems = document.getElementById("existingItems");
+const typeEl = document.getElementById("type");
+const nameEl = document.getElementById("name");
+const imageFile = document.getElementById("imageFile");
+const capacityEl = document.getElementById("capacity");
+const adultPriceEl = document.getElementById("adultPrice");
+const childPriceEl = document.getElementById("childPrice");
+const seniorPriceEl = document.getElementById("seniorPrice");
+
+const slotDayEl = document.getElementById("slotDay");
+const slotPreset = document.getElementById("slotPreset");
+const slotList = document.getElementById("slotList");
+const addSlotBtn = document.getElementById("addSlotBtn");
+const clearDayBtn = document.getElementById("clearDayBtn");
+
+const saveBtn = document.getElementById("saveBtn");
+
+const calendarDate = document.getElementById("calendarDate");
+const calendarResults = document.getElementById("calendarResults");
+
+const customStart = document.getElementById("customStart");
+const customEnd = document.getElementById("customEnd");
+const addCustomSlot = document.getElementById("addCustomSlot");
+
+/* Date overrides UI */
+const slotDateEl = document.getElementById("slotDate");
+const dateStartEl = document.getElementById("dateStart");
+const dateEndEl = document.getElementById("dateEnd");
+const addDateSlotBtn = document.getElementById("addDateSlotBtn");
+const clearDateSlotsBtn = document.getElementById("clearDateSlotsBtn");
+const dateSlotList = document.getElementById("dateSlotList");
+
+/* ✅ Helpers */
+const slug = (s) => String(s || "")
+  .toLowerCase()
+  .trim()
+  .replace(/[^a-z0-9]+/g,"-")
+  .replace(/(^-|-$)/g,"");
+
+const WEEK_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
+const WEEK_LABEL = {mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",sun:"Sun"};
+
+/* ✅ State
+  weeklySlots: { mon:{ "10:00-13:00":{start,end,enabled} }, tue:{...}, ... }
+  dateOverrides: { "2026-02-24": { "10:00-13:00":{start,end,enabled} } }
+*/
+let weeklySlots = {};
+let dateOverrides = {};
+let stopItemsListener = null;
+
+/* ✅ Ensure structure exists */
+function ensureWeeklySlots(){
+  if(!weeklySlots || typeof weeklySlots !== "object") weeklySlots = {};
+  WEEK_KEYS.forEach(k => { if(!weeklySlots[k]) weeklySlots[k] = {}; });
+}
+async function uploadToCloudinary(file){
+  const form = new FormData();
+  form.append("file", file);
+  form.append("upload_preset", UPLOAD_PRESET);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+    method: "POST",
+    body: form
+  });
+
+  const data = await res.json();
+  if (!data.secure_url) throw new Error("Cloudinary upload failed");
+  return data.secure_url;
+}
+/* ✅ Render weekly slots for selected weekday */
+function renderWeeklySlots(){
+  ensureWeeklySlots();
+  const dayKey = slotDayEl.value;
+  const day = weeklySlots[dayKey] || {};
+  const entries = Object.entries(day);
+
+  if(!entries.length){
+    slotList.innerHTML = `<div class="small">No slots for ${WEEK_LABEL[dayKey]}. Add one above.</div>`;
+    return;
+  }
+
+  slotList.innerHTML = `
+    <div class="small" style="margin-bottom:8px;"><strong>${WEEK_LABEL[dayKey]}</strong> slots:</div>
+    ${entries.map(([k,v]) => `
+      <div class="slotRow">
+        <span class="pill">${v.enabled ? "On" : "Off"}</span>
+        <span>${v.start} – ${v.end}</span>
+        <button class="btn2" type="button" data-wtoggle="${k}">Toggle</button>
+        <button class="btnDanger" type="button" data-wremove="${k}">Remove</button>
+      </div>
+    `).join("")}
+  `;
+
+  slotList.querySelectorAll("[data-wtoggle]").forEach(btn=>{
+    btn.onclick = () => {
+      const key = btn.dataset.wtoggle;
+      weeklySlots[dayKey][key].enabled = !weeklySlots[dayKey][key].enabled;
+      renderWeeklySlots();
+    };
+  });
+
+  slotList.querySelectorAll("[data-wremove]").forEach(btn=>{
+    btn.onclick = () => {
+      const key = btn.dataset.wremove;
+      delete weeklySlots[dayKey][key];
+      renderWeeklySlots();
+    };
+  });
+}
+
+slotDayEl.onchange = renderWeeklySlots;
+
+/* ✅ Add preset to selected weekday */
+addSlotBtn.onclick = () => {
+  ensureWeeklySlots();
+  if(!slotPreset.value) return;
+
+  const dayKey = slotDayEl.value;
+  const [start,end] = slotPreset.value.split("|");
+  const key = `${start}-${end}`;
+
+  weeklySlots[dayKey][key] = { start, end, enabled:true };
+  slotPreset.value = "";
+  renderWeeklySlots();
+};
+
+/* ✅ Add custom slot to selected weekday */
+addCustomSlot.onclick = () => {
+  ensureWeeklySlots();
+  const dayKey = slotDayEl.value;
+
+  if(!customStart.value || !customEnd.value){
+    alert("Select start and end time");
+    return;
+  }
+  if(customStart.value >= customEnd.value){
+    alert("End time must be after start time");
+    return;
+  }
+
+  const key = `${customStart.value}-${customEnd.value}`;
+  weeklySlots[dayKey][key] = {
+    start: customStart.value,
+    end: customEnd.value,
+    enabled: true
+  };
+
+  customStart.value = "";
+  customEnd.value = "";
+  renderWeeklySlots();
+};
+
+/* ✅ Clear selected weekday */
+clearDayBtn.onclick = () => {
+  ensureWeeklySlots();
+  const dayKey = slotDayEl.value;
+  if(!confirm(`Clear all slots for ${WEEK_LABEL[dayKey]}?`)) return;
+  weeklySlots[dayKey] = {};
+  renderWeeklySlots();
+};
+
+/* ✅ Date Overrides render */
+function renderDateSlots(){
+  const d = slotDateEl.value;
+  if(!d){
+    dateSlotList.innerHTML = "Pick a date to view overrides.";
+    return;
+  }
+
+  const day = dateOverrides[d] || {};
+  const entries = Object.entries(day);
+
+  if(!entries.length){
+    dateSlotList.innerHTML = "No overrides for this date yet.";
+    return;
+  }
+
+  dateSlotList.innerHTML = entries.map(([k,v])=>`
+    <div class="slotRow">
+      <span class="pill">${v.enabled ? "On" : "Off"}</span>
+      <span>${v.start} – ${v.end}</span>
+      <button class="btn2" type="button" data-dtoggle="${k}">Toggle</button>
+      <button class="btnDanger" type="button" data-dremove="${k}">Remove</button>
+    </div>
+  `).join("");
+
+  dateSlotList.querySelectorAll("[data-dtoggle]").forEach(btn=>{
+    btn.onclick = () => {
+      const key = btn.dataset.dtoggle;
+      dateOverrides[d][key].enabled = !dateOverrides[d][key].enabled;
+      renderDateSlots();
+    };
+  });
+
+  dateSlotList.querySelectorAll("[data-dremove]").forEach(btn=>{
+    btn.onclick = () => {
+      const key = btn.dataset.dremove;
+      delete dateOverrides[d][key];
+      renderDateSlots();
+    };
+  });
+}
+
+slotDateEl.onchange = renderDateSlots;
+
+addDateSlotBtn.onclick = () => {
+  const d = slotDateEl.value;
+  if(!d) return alert("Select a date first");
+  if(!dateStartEl.value || !dateEndEl.value) return alert("Select start and end time");
+  if(dateStartEl.value >= dateEndEl.value) return alert("End time must be after start time");
+
+  const key = `${dateStartEl.value}-${dateEndEl.value}`;
+  if(!dateOverrides[d]) dateOverrides[d] = {};
+
+  dateOverrides[d][key] = {
+    start: dateStartEl.value,
+    end: dateEndEl.value,
+    enabled: true
+  };
+
+  dateStartEl.value = "";
+  dateEndEl.value = "";
+  renderDateSlots();
+};
+
+clearDateSlotsBtn.onclick = () => {
+  const d = slotDateEl.value;
+  if(!d) return alert("Select a date first");
+  if(!confirm("Clear all overrides for this date?")) return;
+
+  delete dateOverrides[d];
+  renderDateSlots();
+};
+
+/* ✅ Login/Register */
+loginBtn.onclick = async () => {
+  const email = emailEl.value.trim();
+  const pass = passwordEl.value;
+  if(!email || !pass) return alert("Enter email + password");
+
+  try{
+    await signInWithEmailAndPassword(auth, email, pass);
+  }catch(err){
+    await createUserWithEmailAndPassword(auth, email, pass);
+  }
+};
+
+logoutBtn.onclick = () => signOut(auth);
+
+/* ✅ Load items dropdown */
+async function loadItemsDropdown(){
+  const snap = await get(child(ref(rtdb), "items"));
+  existingItems.innerHTML = `<option value="">— Select existing item —</option>`;
+  if(!snap.exists()) return;
+
+  Object.entries(snap.val()).forEach(([id,data])=>{
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = `${String(data.type || "").toUpperCase()} — ${data.name || id}`;
+    existingItems.appendChild(o);
+  });
+}
+
+/* ✅ Auth gate */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    loginBox.classList.remove("hidden");
+    adminBox.classList.add("hidden");
+    return;
+  }
+
+  // Check if the user is an admin
+  if (user.email !== ADMIN_EMAIL) {   // or !ADMIN_EMAILS.includes(user.email) for multiple admins
+    alert("Not authorized. Admins must use the admin panel.");
+    await signOut(auth);
+    loginBox.classList.remove("hidden");
+    adminBox.classList.add("hidden");
+    return;
+  }
+if (!user || user.email !== ADMIN_EMAIL) {
+    alert("Access denied. Admins only.");
+    location.href = "login.html"; // or home page
+}
+  // Admin is logged in
+  loginBox.classList.add("hidden");
+  adminBox.classList.remove("hidden");
+
+  await loadItemsDropdown();
+
+  if(stopItemsListener) stopItemsListener();
+  stopItemsListener = onValue(ref(rtdb, "items"), (snap) => {
+    const data = snap.val();
+    renderAttractionsLive(data);
+    renderEventsLive(data);
+  });
+
+  ensureWeeklySlots();
+  renderWeeklySlots();
+  renderDateSlots();
+});
+/* ✅ Migration helper:
+   - If item has old `timeSlots` (same every day), copy to all weekdays.
+   - If item has old `dateSlots`, map it to new `dateOverrides`.
+*/
+function migrateOldToNew(d){
+  // weeklySlots:
+  if(d?.weeklySlots && typeof d.weeklySlots === "object"){
+    weeklySlots = d.weeklySlots;
+    ensureWeeklySlots();
+  } else {
+    weeklySlots = {};
+    ensureWeeklySlots();
+    const old = d?.timeSlots || {};
+    if(old && Object.keys(old).length){
+      WEEK_KEYS.forEach(w => {
+        weeklySlots[w] = JSON.parse(JSON.stringify(old));
+      });
+    }
+  }
+
+  // dateOverrides:
+  if(d?.dateOverrides && typeof d.dateOverrides === "object"){
+    dateOverrides = d.dateOverrides;
+  } else {
+    dateOverrides = d?.dateSlots || {}; // old name -> new
+  }
+}
+
+/* ✅ Selecting existing item fills the form */
+existingItems.onchange = async () => {
+  const id = existingItems.value;
+  if(!id) return;
+
+  const snap = await get(child(ref(rtdb), `items/${id}`));
+  if(!snap.exists()) return;
+
+  const d = snap.val();
+  typeEl.value = d.type || "event";
+  nameEl.value = d.name || "";
+  capacityEl.value = d.capacity ?? "";
+  adultPriceEl.value = d.pricing?.adult ?? 0;
+  childPriceEl.value = d.pricing?.child ?? 0;
+  seniorPriceEl.value = d.pricing?.senior ?? 0;
+
+  migrateOldToNew(d);
+
+  // refresh UI
+  renderWeeklySlots();
+  renderDateSlots();
+};
+
+/* ✅ Save item (RTDB + optional Storage upload) */
+saveBtn.onclick = async () => {
+  try {
+    const name = nameEl.value.trim();
+    if (!name) return alert("Please enter a name");
+
+    const itemId = `${typeEl.value}_${slug(name)}`;
+
+    // Get existing item
+    const existingSnap = await get(child(ref(rtdb), `items/${itemId}`));
+    let newImageUrl = existingSnap.exists() ? existingSnap.val()?.image || "" : "";
+
+    // Upload new image if selected
+    if (imageFile.files[0]) {
+      newImageUrl = await uploadToCloudinary(imageFile.files[0]);
+    }
+
+    const updates = {
+      type: typeEl.value,
+      name,
+      capacity: Number(capacityEl.value || 100),
+      pricing: {
+        adult: Number(adultPriceEl.value || 0),
+        child: Number(childPriceEl.value || 0),
+        senior: Number(seniorPriceEl.value || 0)
+      },
+      weeklySlots,
+      dateOverrides,
+      updatedAt: Date.now()
+    };
+
+    // only overwrite image if new one selected
+    if (newImageUrl) {
+      updates.image = newImageUrl;
+    }
+
+    await set(ref(rtdb, `items/${itemId}`), updates);
+
+    alert("Saved successfully ✅");
+    await loadItemsDropdown();
+    existingItems.value = itemId;
+
+  } catch (err) {
+    console.error("SAVE FAILED:", err);
+    alert("Save failed ❌\n" + err.message);
+  }
+};
+
+/* ✅ Booking Calendar (reads RTDB availability) */
+calendarDate.onchange = async () => {
+  const date = calendarDate.value;
+  if(!date) return;
+
+  calendarResults.innerHTML = "Loading…";
+  let html = "";
+
+  const availSnap = await get(child(ref(rtdb), "availability"));
+  if(availSnap.exists()){
+    Object.entries(availSnap.val()).forEach(([itemId, dates]) => {
+      if(!dates?.[date]) return;
+
+      html += `<h4>${itemId.replace(/_/g," ").toUpperCase()}</h4>`;
+      Object.entries(dates[date]).forEach(([slot, info]) => {
+        html += `
+          <div class="booking-card">
+            ⏱ ${slot} → ${info.booked}/${info.max} booked
+          </div>
+        `;
+      });
+    });
+  }
+
+  calendarResults.innerHTML = html || "No bookings for this date.";
+};
+
+/* Live lists */
+function countEnabledSlotsInWeek(item){
+  const w = item?.weeklySlots;
+  if(!w) return 0;
+  let n = 0;
+  Object.values(w).forEach(dayObj=>{
+    Object.values(dayObj || {}).forEach(s=>{ if(s?.enabled) n++; });
+  });
+  return n;
+}
+
+function renderAttractionsLive(itemsObj){
+  const entries = Object.entries(itemsObj || {})
+    .filter(([_, item]) => item?.type === "attraction");
+
+  if(!entries.length){
+    liveAttractionsList.innerHTML = "No attractions yet.";
+    return;
+  }
+
+  liveAttractionsList.innerHTML = entries.map(([id, a]) => {
+    const price = a?.pricing?.adult ?? 0;
+    const cap = a?.capacity ?? "";
+    const img = a?.image || "placeholder.jpg";
+
+    const enabledCount = countEnabledSlotsInWeek(a);
+    const overridesCount = Object.keys(a?.dateOverrides || {}).length;
+
+    return `
+      <div class="booking-card">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <img src="${img}" alt="${a?.name || id}" style="width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid var(--border);">
+          <div style="flex:1">
+            <div><strong>${a?.name || id}</strong></div>
+            <div class="small">Weekly slots enabled: ${enabledCount}</div>
+            <div class="small">Date overrides: ${overridesCount}</div>
+            <div class="small">Capacity: ${cap} • From £${price}</div>
+            <div class="small" style="opacity:.75">ID: ${id}</div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:10px;">
+          <button class="btn2" type="button" data-edit="${id}">Load to Edit</button>
+          <button class="btnDanger" type="button" data-del="${id}">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  liveAttractionsList.querySelectorAll("[data-edit]").forEach(btn=>{
+    btn.onclick = async () => {
+      const id = btn.dataset.edit;
+      existingItems.value = id;
+      existingItems.dispatchEvent(new Event("change"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+  });
+
+  liveAttractionsList.querySelectorAll("[data-del]").forEach(btn=>{
+    btn.onclick = async () => {
+      const id = btn.dataset.del;
+      if(!confirm(`Delete attraction "${id}"? This cannot be undone.`)) return;
+
+      try{
+        await remove(ref(rtdb, `items/${id}`));
+        alert("Deleted ✅");
+        await loadItemsDropdown();
+      }catch(err){
+        console.error(err);
+        alert("Delete failed ❌\n" + (err?.message || err));
+      }
+    };
+  });
+}
+
+
+
+saveBtn.onclick = saveItem;
+function renderEventsLive(itemsObj){
+  const entries = Object.entries(itemsObj || {})
+    .filter(([_, item]) => item?.type === "event");
+
+  if(!entries.length){
+    liveEventsList.innerHTML = "No events yet.";
+    return;
+  }
+
+  liveEventsList.innerHTML = entries.map(([id, e]) => {
+    const price = e?.pricing?.adult ?? 0;
+    const cap = e?.capacity ?? "";
+    const img = e?.image || "placeholder.jpg";
+
+    const enabledCount = countEnabledSlotsInWeek(e);
+    const overridesCount = Object.keys(e?.dateOverrides || {}).length;
+
+    return `
+      <div class="booking-card">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <img src="${img}" alt="${e?.name || id}" style="width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid var(--border);">
+          <div style="flex:1">
+            <div><strong>${e?.name || id}</strong></div>
+            <div class="small">Weekly slots enabled: ${enabledCount}</div>
+            <div class="small">Date overrides: ${overridesCount}</div>
+            <div class="small">Capacity: ${cap} • From £${price}</div>
+            <div class="small" style="opacity:.75">ID: ${id}</div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:10px;">
+          <button class="btn2" type="button" data-edit-event="${id}">Load to Edit</button>
+          <button class="btnDanger" type="button" data-del-event="${id}">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  liveEventsList.querySelectorAll("[data-edit-event]").forEach(btn=>{
+    btn.onclick = async () => {
+      const id = btn.dataset.editEvent;
+      existingItems.value = id;
+      existingItems.dispatchEvent(new Event("change"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+  });
+
+  liveEventsList.querySelectorAll("[data-del-event]").forEach(btn=>{
+    btn.onclick = async () => {
+      const id = btn.dataset.delEvent;
+      if(!confirm(`Delete event "${id}"? This cannot be undone.`)) return;
+
+      try{
+        await remove(ref(rtdb, `items/${id}`));
+        alert("Deleted ✅");
+        await loadItemsDropdown();
+      }catch(err){
+        console.error(err);
+        alert("Delete failed ❌\n" + (err?.message || err));
+      }
+    };
+  });
+}
+
+/* initial */
+ensureWeeklySlots();
+renderWeeklySlots();
+renderDateSlots();
+
+</script>
+</body>
+</html>

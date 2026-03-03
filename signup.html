@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sign Up | Harvest Havens</title>
+<style>
+:root{
+  --bg:#0b0f0d;
+  --card:#0f1512;
+  --border:rgba(255,255,255,.10);
+  --text:#eaf3ed;
+  --muted:rgba(234,243,237,.70);
+  --accent:#2f6b3f;
+  --accent2:#1f4d2c;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:28px;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:
+    radial-gradient(900px 600px at 15% 15%, rgba(47,107,63,.35), transparent 55%),
+    radial-gradient(900px 600px at 85% 25%, rgba(31,77,44,.35), transparent 60%),
+    linear-gradient(180deg, #070a08, var(--bg));
+  color:var(--text);
+}
+.shell{
+  width:100%;
+  max-width:520px;
+  background:rgba(15,21,18,.92);
+  border:1px solid var(--border);
+  border-radius:22px;
+  padding:26px;
+  box-shadow:0 30px 90px rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+}
+h1{margin:0;font-size:22px}
+p{margin:8px 0 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+input,button{
+  width:100%;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.03);
+  color:var(--text);
+  margin-top:12px;
+  font-size:15px;
+}
+input::placeholder{color:rgba(234,243,237,.55)}
+button{
+  border:none;
+  background:linear-gradient(180deg, var(--accent), var(--accent2));
+  font-weight:800;
+  cursor:pointer;
+}
+button.secondary{
+  background:rgba(255,255,255,.06);
+  border:1px solid var(--border);
+}
+button:disabled{opacity:.6;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.msg{
+  margin-top:12px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.03);
+  color:var(--muted);
+  font-size:13px;
+}
+small{color:var(--muted)}
+a{color:#bfe7c9;text-decoration:none}
+a:hover{text-decoration:underline}
+hr{border:none;border-top:1px solid var(--border);margin:14px 0}
+</style>
+</head>
+<body>
+  <div class="shell">
+    <h1>Create your account</h1>
+    <p>We verify your phone and email once to keep bookings safe and real.</p>
+
+    <div class="grid">
+      <input id="fullName" placeholder="Full name (required)">
+      <input id="phone" placeholder="Phone (E.164 e.g. +447700900000)" inputmode="tel">
+    </div>
+
+    <input id="email" type="email" placeholder="Email address" autocomplete="username">
+    <input id="password" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password">
+
+    <div id="recaptcha" style="margin-top:12px;"></div>
+
+    <button id="startBtn">Verify Phone (SMS)</button>
+
+    <div id="otpBox" style="display:none;">
+      <input id="otp" placeholder="Enter SMS code">
+      <button id="finishBtn">Create Account</button>
+      <button id="cancelBtn" class="secondary" type="button">Cancel</button>
+    </div>
+
+    <hr>
+    <small>Already have an account? <a id="loginLink" href="login.html">Sign in</a></small>
+
+    <div id="msg" class="msg" style="display:none;"></div>
+  </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  sendEmailVerification,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  PhoneAuthProvider,
+  linkWithCredential,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyDjNcMWpJ8zO2j0Z4vH8GOFPHK2Tt8pOF4",
+  authDomain: "harvesthaven-97c9c.firebaseapp.com",
+  projectId: "harvesthaven-97c9c"
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+await setPersistence(auth, browserLocalPersistence);
+
+const qs = new URLSearchParams(location.search);
+const returnUrl = qs.get("return") || "events.html";
+document.getElementById("loginLink").href = `login.html?return=${encodeURIComponent(returnUrl)}`;
+
+const fullNameEl = document.getElementById("fullName");
+const phoneEl = document.getElementById("phone");
+const emailEl = document.getElementById("email");
+const passEl = document.getElementById("password");
+
+const startBtn = document.getElementById("startBtn");
+const otpBox = document.getElementById("otpBox");
+const otpEl = document.getElementById("otp");
+const finishBtn = document.getElementById("finishBtn");
+const cancelBtn = document.getElementById("cancelBtn");
+
+const msg = document.getElementById("msg");
+function show(text){
+  msg.style.display = "block";
+  msg.textContent = text;
+}
+
+let verificationId = null;
+
+// reCAPTCHA required by Firebase Phone Auth on web
+const recaptcha = new RecaptchaVerifier(auth, "recaptcha", {
+  size: "normal"
+});
+
+// Step 1: verify phone (SMS)
+startBtn.onclick = async () => {
+  const name = fullNameEl.value.trim();
+  const phone = phoneEl.value.trim();
+  const email = emailEl.value.trim();
+  const password = passEl.value;
+
+  if(!name) return show("Full name is required.");
+  if(!phone) return show("Phone number is required (use +countrycode...).");
+  if(!email) return show("Email is required.");
+  if(!password || password.length < 6) return show("Password must be at least 6 characters.");
+
+  startBtn.disabled = true;
+
+  try{
+    // Send SMS (not creating account yet — just OTP)
+    const confirmation = await signInWithPhoneNumber(auth, phone, recaptcha);
+    verificationId = confirmation.verificationId;
+
+    otpBox.style.display = "block";
+    show("SMS sent. Enter the code to finish sign up.");
+  }catch(e){
+    show(e?.message || "Could not send SMS. Check phone format and try again.");
+  }finally{
+    startBtn.disabled = false;
+  }
+};
+
+// Step 2: create email account + link phone credential + send email verification + save profile
+finishBtn.onclick = async () => {
+  const name = fullNameEl.value.trim();
+  const phone = phoneEl.value.trim();
+  const email = emailEl.value.trim();
+  const password = passEl.value;
+  const code = otpEl.value.trim();
+
+  if(!verificationId) return show("Please verify your phone first.");
+  if(!code) return show("Enter the SMS code.");
+
+  finishBtn.disabled = true;
+
+  try{
+    // Create email/password user
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+    // Set display name
+    await updateProfile(cred.user, { displayName: name });
+
+    // Link phone to this account (only once at signup)
+    const phoneCred = PhoneAuthProvider.credential(verificationId, code);
+    await linkWithCredential(cred.user, phoneCred);
+
+    // Save profile in Firestore (used by booking gate)
+    await setDoc(doc(db, "users", cred.user.uid), {
+      name,
+      phone,
+      phoneVerified: true,
+      email,
+      createdAt: serverTimestamp()
+    });
+
+    // Email verification (must be verified before booking)
+    await sendEmailVerification(cred.user);
+
+    // Sign out so they must verify email, then sign in again
+    await signOut(auth);
+
+    show("Account created ✅ We sent a verification email. Please verify your email, then sign in to continue.");
+  }catch(e){
+    show(e?.message || "Sign up failed.");
+  }finally{
+    finishBtn.disabled = false;
+  }
+};
+
+cancelBtn.onclick = async () => {
+  otpBox.style.display = "none";
+  otpEl.value = "";
+  verificationId = null;
+  show("Phone verification cancelled.");
+};
+</script>
+</body>
+</html>

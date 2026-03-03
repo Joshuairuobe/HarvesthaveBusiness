@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>About Us - Harvest Havens</title>
+
+<style>
+  :root {
+    --bg: #0b0f0d;
+    --card: #0f1512;
+    --gold: #c8a45d;
+    --text: #e6e6e6;
+    --muted: rgba(255,255,255,0.6);
+    --border: rgba(255,255,255,0.1);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    background: radial-gradient(circle at top, #121816, #070a09);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    background: rgba(10, 14, 12, 0.75);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand img {
+    height: 42px;
+    border-radius: 8px;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    color: var(--gold);
+    letter-spacing: 1px;
+  }
+
+  nav ul {
+    list-style: none;
+    display: flex;
+    gap: 22px;
+  }
+
+  nav a {
+    text-decoration: none;
+    color: var(--text);
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0.85;
+    transition: 0.3s;
+  }
+
+  nav a:hover {
+    color: var(--gold);
+    opacity: 1;
+  }
+
+  .about-hero {
+    text-align: center;
+    padding: 120px 20px 80px;
+    border-bottom: 1px solid var(--border);
+    background:
+      linear-gradient(to bottom, rgba(0,0,0,0.65), rgba(0,0,0,0.95)),
+      url("myrex.jpg") center/cover no-repeat;
+  }
+
+  .about-hero h2 {
+    font-size: 46px;
+    color: var(--gold);
+    margin-bottom: 14px;
+  }
+
+  .about-hero p {
+    max-width: 700px;
+    margin: 0 auto;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  main {
+    max-width: 1000px;
+    margin: 100px auto;
+    padding: 0 20px;
+    display: grid;
+    gap: 90px;
+  }
+
+  section {
+    background: linear-gradient(180deg, #0f1512, #0b0f0d);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  section h2 {
+    color: var(--gold);
+    font-size: 28px;
+    margin-bottom: 16px;
+  }
+
+  section p, section li {
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  ul {
+    margin-top: 14px;
+    padding-left: 20px;
+  }
+
+  li {
+    margin-bottom: 10px;
+  }
+
+  .cta-button {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 24px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #d4af6a, #a8833c);
+    color: #0b0f0d;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-decoration: none;
+    box-shadow: 0 10px 30px rgba(200,164,93,0.35);
+    transition: 0.3s;
+  }
+
+  .cta-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 50px rgba(200,164,93,0.5);
+  }
+
+  footer {
+    margin-top: 140px;
+    padding: 40px 20px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  footer a {
+    color: var(--gold);
+    text-decoration: none;
+    margin: 0 6px;
+  }
+
+  footer a:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 768px) {
+    .about-hero h2 {
+      font-size: 34px;
+    }
+
+    section {
+      padding: 26px;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="brand">
+    <img src="my logo.png" alt="Harvest Haven Logo">
+    <h1>Harvest Havens</h1>
+  </div>
+  <nav>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="products.html">Attractions</a></li>
+      <li><a href="events.html">Events</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+</header>
+
+<section class="about-hero">
+  <h2>About Harvest Havens</h2>
+  <p>
+    Where sustainability, family fun, and countryside experiences come together in a refined farm setting.
+  </p>
+</section>
+
+<main>
+
+  <section>
+    <h2>Our Mission</h2>
+    <p>
+      At Harvest Havens, we believe in the power of nature and sustainable farming practices. Our mission is to promote
+      healthier lifestyles by connecting communities to fresh, organic produce while creating meaningful experiences
+      for families through education, seasonal events, and hands-on interaction with farm life.
+    </p>
+  </section>
+
+  <section>
+    <h2>Our Story</h2>
+    <p>
+      Harvest Havens began with a simple idea: to share the joy of growing and harvesting your own food. What started as
+      a small garden grew into a destination where families can explore nature, learn about sustainability, and create
+      lasting memories.
+    </p>
+  </section>
+
+  <section>
+    <h2>What We Offer</h2>
+    <ul>
+      <li><strong>Organic Gardening Tips:</strong> Eco-friendly growing techniques.</li>
+      <li><strong>Fresh, Local Produce:</strong> Seasonal fruits, vegetables, and herbs.</li>
+      <li><strong>Eco-friendly Farming Solutions:</strong> Sustainable farming practices.</li>
+      <li><strong>Curated Marketplace:</strong> Shop local farm products.</li>
+      <li><strong>Petting Zoo:</strong> Meet friendly farm animals.</li>
+      <li><strong>Visitor Attractions:</strong> Seasonal events and educational tours.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Why Choose Harvest Havens?</h2>
+    <ul>
+      <li><strong>Sustainability First:</strong> Environmentally friendly farming.</li>
+      <li><strong>Fresh, Organic Produce:</strong> Chemical-free food.</li>
+      <li><strong>Expert Guidance:</strong> Helpful advice for all skill levels.</li>
+      <li><strong>Community Focused:</strong> Supporting local farms.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Get Involved</h2>
+    <p>Join us in making the world a greener place.</p>
+    <a href="newsletter.html" class="cta-button">Sign Up for Our Newsletter</a>
+  </section>
+
+  <section>
+    <h2>Opening Times</h2>
+    <ul>
+      <li><strong>Monday:</strong> 9:00 AM – 6:00 PM</li>
+      <li><strong>Tuesday:</strong> 9:00 AM – 6:00 PM</li>
+      <li><strong>Wednesday:</strong> 9:00 AM – 6:00 PM</li>
+      <li><strong>Thursday:</strong> 9:00 AM – 6:00 PM</li>
+      <li><strong>Friday:</strong> 9:00 AM – 6:00 PM</li>
+      <li><strong>Saturday:</strong> 10:00 AM – 4:00 PM</li>
+      <li><strong>Sunday:</strong> Closed</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    © 2026 Harvest Havens |
+    <a href="privacy policy.html">Privacy Policy</a> |
+    <a href="terms of service.html">Terms of Service</a>
+  </p>
+</footer>
+
+</body>
+</html>

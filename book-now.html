@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Book | Harvest Havens Farm</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+  --green:#2f6b3f;
+  --green-dark:#1f4d2c;
+  --bg:#f4f7f5;
+  --card:#ffffff;
+  --muted:#6b7c72;
+  --border:#e4e9e6;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:var(--bg);
+  color:#1d2b23;
+}
+.container{
+  max-width:640px;
+  margin:50px auto;
+  background:var(--card);
+  padding:30px;
+  border-radius:20px;
+  box-shadow:0 30px 70px rgba(0,0,0,.08);
+}
+.hero img{
+  width:100%;
+  border-radius:16px;
+  margin-bottom:20px;
+  max-height:260px;
+  object-fit:cover;
+}
+h2{margin:0;color:var(--green)}
+.note{font-size:13px;color:var(--muted)}
+input,select,button{
+  width:100%;
+  padding:14px;
+  margin-top:14px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  font-size:15px;
+}
+button{
+  background:var(--green);
+  color:#fff;
+  border:none;
+  font-weight:700;
+  cursor:pointer;
+}
+button:hover{background:var(--green-dark)}
+.hidden{display:none}
+.totalBox{
+  margin-top:12px;
+  padding:12px;
+  border-radius:12px;
+  background:#f8faf9;
+  border:1px solid var(--border);
+  font-weight:700;
+}
+.payBtn{margin-top:10px;font-weight:700}
+.payBtn.apple{background:#000}
+.payBtn.google{background:#4285f4}
+.payBtn.card{background:#2f6b3f}
+.success{
+  background:#e9f6ee;
+  padding:16px;
+  border-radius:14px;
+  margin-top:16px;
+  text-align:center;
+  font-weight:700;
+  color:var(--green);
+}
+#qrTicket{
+  margin:16px auto;
+  display:flex;
+  justify-content:center;
+}
+.success button{background:#111;margin-top:10px;}
+.topBar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+}
+.logoutBtn{
+  background:#eef3f0;
+  color:#2f6b3f;
+}
+</style>
+
+<!-- QR + PDF libs -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="hero">
+    <img id="eventImage" src="haven.jpg">
+  </div>
+
+  <h2 id="title">Booking</h2>
+  <p id="subtitle" class="note"></p>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard">
+
+    <div class="topBar">
+      <span id="userLabel" class="note"></span>
+      <button class="logoutBtn" id="logoutBtn" type="button">Logout</button>
+    </div>
+
+    <form id="bookingForm">
+      <!-- ✅ You can keep this name input if you want; we will prefill from profile -->
+      <input id="name" placeholder="Full name" required>
+      <input id="date" type="date" required>
+
+      <select id="time" required>
+        <option value="">Select time slot</option>
+      </select>
+
+      <input id="adultCount" type="number" min="0" placeholder="Adults">
+      <input id="childCount" type="number" min="0" placeholder="Children">
+      <input id="seniorCount" type="number" min="0" placeholder="Seniors">
+
+      <div id="pricePreview" class="totalBox">Total: £0</div>
+      <div id="priceNote" class="note"></div>
+
+      <h4>Payment (Test Mode)</h4>
+      <button type="button" class="payBtn apple"> Apple Pay</button>
+      <button type="button" class="payBtn google">Google Pay</button>
+      <button type="button" class="payBtn card">Pay with Card</button>
+
+      <div id="paymentStatus" class="note"></div>
+
+      <button type="submit">Confirm Booking</button>
+    </form>
+
+    <div id="successMsg" class="success hidden">
+      Booking confirmed & paid ✅
+      <div id="qrTicket"></div>
+      <button type="button" onclick="downloadReceipt()">Download Receipt</button>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+import {
+  getFirestore, addDoc, collection, serverTimestamp, doc, getDoc
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+import {
+  getDatabase, ref, get, runTransaction
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+/* INIT */
+const app = initializeApp({
+  apiKey: "AIzaSyDjNcMWpJ8zO2j0Z4vH8GOFPHK2Tt8pOF4",
+  authDomain: "harvesthaven-97c9c.firebaseapp.com",
+  databaseURL: "https://harvesthaven-97c9c-default-rtdb.firebaseio.com",
+  projectId: "harvesthaven-97c9c"
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+const rtdb = getDatabase(app);
+
+/* PARAMS */
+const p = new URLSearchParams(location.search);
+const itemName = p.get("item");
+const type = p.get("type");
+
+if (!itemName || !type) {
+  alert("Invalid booking link");
+  location.href = "events.html";
+}
+
+const itemId = `${type}_${itemName.toLowerCase().replace(/[^a-z0-9]+/g,"-")}`;
+
+/* DOM */
+const titleEl = document.getElementById("title");
+const subtitleEl = document.getElementById("subtitle");
+const eventImage = document.getElementById("eventImage");
+const timeEl = document.getElementById("time");
+const pricePreview = document.getElementById("pricePreview");
+const priceNote = document.getElementById("priceNote");
+const paymentStatus = document.getElementById("paymentStatus");
+const successMsg = document.getElementById("successMsg");
+const qrBox = document.getElementById("qrTicket");
+const logoutBtn = document.getElementById("logoutBtn");
+const userLabel = document.getElementById("userLabel");
+
+const dateEl = document.getElementById("date");
+const bookingForm = document.getElementById("bookingForm");
+const nameEl = document.getElementById("name");
+
+const adultCount = document.getElementById("adultCount");
+const childCount = document.getElementById("childCount");
+const seniorCount = document.getElementById("seniorCount");
+
+/* UI TEXT */
+titleEl.textContent = itemName;
+subtitleEl.textContent = type === "event" ? "Event Booking" : "Attraction Booking";
+
+/* Redirect helper (keeps return URL) */
+function goLogin(){
+  const returnUrl = encodeURIComponent(location.href);
+  location.href = `login.html?return=${returnUrl}`;
+}
+
+/* ✅ AUTH GATE (must be signed in + email verified + profile complete) */
+onAuthStateChanged(auth, async (u) => {
+  if(!u) return goLogin();
+
+  // block admin from booking
+  if(u.email === "harvesthaven10@harvesthaven.com"){
+    alert("Admin accounts cannot make bookings.");
+    location.href = "admin.html";
+    return;
+  }
+
+  // must verify email
+  if(!u.emailVerified){
+    alert("Please verify your email first. We just sent you a verification email when you signed up.");
+    await signOut(auth);
+    return goLogin();
+  }
+
+  // must have profile (name + phone + phoneVerified)
+  const userDoc = await getDoc(doc(db, "users", u.uid));
+  const profile = userDoc.exists() ? userDoc.data() : null;
+
+  if(!profile || !profile.name || !profile.phone || profile.phoneVerified !== true){
+    alert("Your account setup is incomplete. Please complete sign up (name + phone verification).");
+    await signOut(auth);
+    return location.href = `signup.html?return=${encodeURIComponent(location.href)}`;
+  }
+
+  userLabel.textContent = `Logged in as ${u.email}`;
+  // prefill name from profile
+  nameEl.value = profile.name || "";
+
+  // Now load item + continue
+  await loadItemFromRTDB();
+});
+
+/* Logout */
+logoutBtn.onclick = ()=> signOut(auth).then(goLogin);
+
+/* STATE */
+let prices = { adult:15, child:8, senior:10 };
+let capacity = 100;
+let slots = {};
+let paid = false;
+
+/* ✅ LOAD ITEM (RTDB) — expects your newer structure too */
+async function loadItemFromRTDB(){
+  const itemSnap = await get(ref(rtdb, `items/${itemId}`));
+
+  if (!itemSnap.exists()){
+    priceNote.textContent = "This item is not available.";
+    timeEl.innerHTML = `<option value="">No slots available</option>`;
+    return;
+  }
+
+  const d = itemSnap.val();
+  prices   = d.pricing || prices;
+  capacity = Number(d.capacity) || capacity;
+
+  // ✅ Support NEW: weeklySlots + dateOverrides
+  const weeklySlots = d.weeklySlots || null;
+  const dateOverrides = d.dateOverrides || null;
+
+  // ✅ Backward compatibility (old)
+  const oldDateSlots = d.dateSlots || {};
+  const oldDefaultSlots = d.timeSlots || {};
+
+  slots = { weeklySlots, dateOverrides, oldDateSlots, oldDefaultSlots };
+
+  if (d.image) eventImage.src = d.image;
+
+  priceNote.textContent =
+    `Prices — Adult £${prices.adult}, Child £${prices.child}, Senior £${prices.senior}`;
+
+  renderSlots();
+  calc();
+}
+async function fetchSlotsForDate(dateStr){
+  if (!dateStr) return;
+
+  const itemSnap = await get(ref(rtdb, `items/${itemId}`));
+  if (!itemSnap.exists()) return;
+
+  const d = itemSnap.val();
+  const weeklySlots = d.weeklySlots || {};
+  const dateOverrides = d.dateOverrides || {};
+
+  slots.weeklySlots = weeklySlots;
+  slots.dateOverrides = dateOverrides;
+
+  renderSlots();
+}
+
+// then on date change:
+dateEl.onchange = async () => {
+  await fetchSlotsForDate(dateEl.value);
+};
+/* DATE -> weekday key */
+function weekdayKeyFromDate(dateStr){
+  const day = new Date(dateStr + "T00:00:00").getDay(); // 0 Sun ... 6 Sat
+  return ["sun","mon","tue","wed","thu","fri","sat"][day];
+}
+
+/* SLOT EXPIRED */
+function isSlotExpired(dateStr, slotKey){
+  if (!dateStr) return false;
+  const start = slotKey.split("-")[0].trim();
+  const slotStart = new Date(`${dateStr}T${start}:00`);
+  return slotStart < new Date();
+}
+
+dateEl.onchange = async () => {
+  const itemSnap = await get(ref(rtdb, `items/${itemId}`));
+  if (!itemSnap.exists()) return;
+
+  const d = itemSnap.val();
+  slots.weeklySlots = d.weeklySlots || {};
+  slots.dateOverrides = d.dateOverrides || {};
+  
+  renderSlots(); // show updated slots
+};
+
+async function renderSlots() {
+  timeEl.innerHTML = `<option value="">Select time slot</option>`;
+  if (!dateEl.value) return;
+
+  const dateStr = dateEl.value;
+  const dayKey = weekdayKeyFromDate(dateStr);
+
+  const slotList = [];
+
+  // 1️⃣ Date Overrides (highest priority)
+  const override = slots?.dateOverrides?.[dateStr];
+  if (override) {
+    for (const [slotKey, v] of Object.entries(override)) {
+      if (v?.enabled) slotList.push({ slotKey, start: v.start, end: v.end });
+    }
+  }
+
+  // 2️⃣ Weekly Slots (if no override)
+  if (!slotList.length && slots?.weeklySlots?.[dayKey]) {
+    for (const [slotKey, v] of Object.entries(slots.weeklySlots[dayKey])) {
+      if (v?.enabled) slotList.push({ slotKey, start: v.start, end: v.end });
+    }
+  }
+
+  // 3️⃣ Old Date Slots (backward compatibility)
+  if (!slotList.length && slots?.oldDateSlots?.[dateStr]) {
+    for (const [slotKey, v] of Object.entries(slots.oldDateSlots[dateStr])) {
+      if (v?.enabled) slotList.push({ slotKey, start: v.start ?? slotKey.split("-")[0], end: v.end ?? slotKey.split("-")[1] });
+    }
+  }
+
+  // 4️⃣ Default old slots
+  if (!slotList.length && slots?.oldDefaultSlots) {
+    for (const [slotKey, v] of Object.entries(slots.oldDefaultSlots)) {
+      if (v?.enabled) slotList.push({ slotKey, start: v.start ?? slotKey.split("-")[0], end: v.end ?? slotKey.split("-")[1] });
+    }
+  }
+
+  // Append available slots to dropdown
+  for (const s of slotList) {
+    const snap = await get(ref(rtdb, `availability/${itemId}/${dateStr}/${s.slotKey}`));
+    const booked = snap.exists() ? Number(snap.val().booked || 0) : 0;
+    const remaining = Math.max(0, capacity - booked);
+    if (remaining <= 0) continue; // skip fully booked
+    const o = document.createElement("option");
+    o.value = s.slotKey;
+    o.textContent = `${s.start}–${s.end} (${remaining} left)`;
+    timeEl.appendChild(o);
+  }
+
+ if (timeEl.options.length <= 1) {
+  timeEl.innerHTML = `<option value="">No slots available for this date</option>`;
+}
+}
+/* TOTAL */
+function calc(){
+  const a = +adultCount.value || 0;
+  const c = +childCount.value || 0;
+  const s = +seniorCount.value || 0;
+  const total = (a * (Number(prices.adult) || 0)) +
+                (c * (Number(prices.child) || 0)) +
+                (s * (Number(prices.senior) || 0));
+  pricePreview.textContent = `Total: £${total}`;
+  return { total, qty: a + c + s, a, c, s };
+}
+adultCount.oninput = childCount.oninput = seniorCount.oninput = calc;
+
+/* FAKE PAY */
+/* REAL STRIPE PAYMENT */
+document.querySelectorAll(".payBtn").forEach(btn=>{
+  btn.onclick = async ()=>{
+
+    const { total, qty } = calc();
+
+    if(qty <= 0) return alert("Select tickets first");
+    if(total <= 0) return alert("Total is £0 — check admin prices");
+    if(!dateEl.value) return alert("Select a date first");
+    if(!timeEl.value) return alert("Select a time slot first");
+
+    btn.disabled = true;
+    paymentStatus.textContent = "Redirecting to secure payment…";
+
+    try{
+      const response = await fetch("https://console.firebase.google.com/project/harvesthaven-97c9c/overview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          itemName,
+          amount: total * 100, // convert £ to pence
+          date: dateEl.value,
+          timeSlot: timeEl.value,
+          tickets: {
+            adult: +adultCount.value || 0,
+            child: +childCount.value || 0,
+            senior: +seniorCount.value || 0
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if(data.url){
+        window.location.href = data.url; // Redirect to Stripe
+      } else {
+        throw new Error("Stripe session failed.");
+      }
+
+    }catch(err){
+      console.error(err);
+      alert("Payment failed. Try again.");
+      btn.disabled = false;
+      paymentStatus.textContent = "";
+    }
+  };
+});
+/* 🔒 SLOT RESERVATION */
+async function reserve(dateStr, slotKey, qty){
+  const r = ref(rtdb, `availability/${itemId}/${dateStr}/${slotKey}`);
+
+  await runTransaction(r, current => {
+  if (!current) return { booked: qty, max: capacity };
+
+  const booked = Number(current.booked) || 0;
+  const max = Number(current.max);
+
+  if (booked + qty > max) return;
+
+  return { ...current, booked: booked + qty };
+});
+
+  if (!result.committed){
+    throw new Error("This time slot is fully booked. Please pick another slot.");
+  }
+}
+
+/* SUBMIT */
+bookingForm.onsubmit = async e=>{
+  e.preventDefault();
+
+  if(!dateEl.value) return alert("Select a date");
+  if(!timeEl.value) return alert("Select a valid time slot");
+
+  const dayKey = weekdayKeyFromDate(dateEl.value);
+  const liveOverride = slots?.dateOverrides?.[dateEl.value]?.[timeEl.value];
+  const liveWeekly = slots?.weeklySlots?.[dayKey]?.[timeEl.value];
+
+  if (liveOverride && liveOverride.enabled !== true) {
+    return alert("This slot is no longer available. Please refresh.");
+  }
+
+  if (!liveOverride && liveWeekly && liveWeekly.enabled !== true) {
+    return alert("This slot is no longer available. Please refresh.");
+  }
+
+  const { total, qty, a, c, s } = calc();
+
+  if(!nameEl.value.trim()) return alert("Please enter your name");
+  if(qty <= 0) return alert("Select at least 1 ticket");
+
+  try{
+    await loadItemFromRTDB(); // refresh live slots + capacity
+    await reserve(dateEl.value, timeEl.value, qty);
+
+    const refDoc = await addDoc(collection(db, "bookings"), {
+      userId: auth.currentUser.uid,
+      customerName: nameEl.value.trim(),
+      itemId,
+      itemName,
+      type,
+      date: dateEl.value,
+      timeSlot: timeEl.value,
+      tickets: { adult: a, child: c, senior: s },
+      totalPrice: total,
+      status: "paid",
+      createdAt: serverTimestamp()
+    });
+
+    qrBox.innerHTML = "";
+    new QRCode(qrBox, { text: `BOOKING:${refDoc.id}`, width: 120, height: 120 });
+
+    successMsg.classList.remove("hidden");
+  }catch(err){
+    console.error(err);
+    alert(err.message || "Booking failed");
+  }
+};
+/* PDF */
+window.downloadReceipt = ()=>{
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  pdf.text("Harvest Havens Farm",20,20);
+  pdf.text(`Item: ${itemName}`,20,40);
+  pdf.text(`Date: ${dateEl.value || ""}`,20,50);
+  pdf.text(`Time: ${timeEl.value || ""}`,20,60);
+  pdf.text(`Total Paid: £${pricePreview.textContent.replace("Total: £","")}`,20,80);
+  pdf.text("Status: PAID (Test Mode)",20,95);
+  pdf.save("HarvestHavensReceipt.pdf");
+};
+</script>
+
+</body>
+</html>
