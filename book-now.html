@@ -426,7 +426,7 @@ payNowBtn.onclick = async () => {
   paymentStatus.textContent = "Redirecting to secure payment…";
 
   try{
-    const response = await fetch("https://us-central1-harvesthaven-97c9c.cloudfunctions.net/createCheckoutSession", {
+    const response = await fetch("https://createcheckoutsession-6fgozcf3nq-uc.a.run.app", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
