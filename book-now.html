@@ -139,7 +139,6 @@ button:hover{background:var(--green-dark)}
 </button>
       <div id="paymentStatus" class="note"></div>
 
-      <button type="submit">Confirm Booking</button>
     </form>
 
     <div id="successMsg" class="success hidden">
@@ -536,7 +535,8 @@ bookingForm.onsubmit = async e=>{
     qrBox.innerHTML = "";
     new QRCode(qrBox, { text: `BOOKING:${refDoc.id}`, width: 120, height: 120 });
 
-    successMsg.classList.remove("hidden");
+  // Redirect to success page with booking ID as query param
+window.location.href = `success.html?bookingId=${refDoc.id}`;
   }catch(err){
     console.error(err);
     alert(err.message || "Booking failed");
