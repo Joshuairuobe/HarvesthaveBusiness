@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Booking Success | Harvest Havens Farm</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+  --green:#2f6b3f;
+  --green-dark:#1f4d2c;
+  --bg:#f4f7f5;
+  --card:#ffffff;
+  --muted:#6b7c72;
+  --border:#e4e9e6;
+}
+body{
+  margin:0;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:var(--bg);
+  color:#1d2b23;
+}
+.container{
+  max-width:640px;
+  margin:50px auto;
+  background:var(--card);
+  padding:30px;
+  border-radius:20px;
+  box-shadow:0 30px 70px rgba(0,0,0,.08);
+  text-align:center;
+}
+h2{color:var(--green)}
+#qrTicket{
+  margin:16px auto;
+  display:flex;
+  justify-content:center;
+}
+button{
+  margin-top:20px;
+  padding:14px;
+  border:none;
+  border-radius:10px;
+  background:#2f6b3f;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+button:hover{background:#1f4d2c;}
+.note{color:var(--muted);}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyDjNcMWpJ8zO2j0Z4vH8GOFPHK2Tt8pOF4",
+  authDomain: "harvesthaven-97c9c.firebaseapp.com",
+  projectId: "harvesthaven-97c9c"
+});
+const db = getFirestore(app);
+
+const qrBox = document.getElementById("qrTicket");
+const bookingInfoEl = document.getElementById("bookingInfo");
+
+// Get bookingId from URL
+const params = new URLSearchParams(location.search);
+const bookingId = params.get("bookingId");
+
+if(!bookingId) {
+  bookingInfoEl.textContent = "Invalid booking.";
+} else {
+  const bookingDoc = await getDoc(doc(db, "bookings", bookingId));
+  if(!bookingDoc.exists()) {
+    bookingInfoEl.textContent = "Booking not found.";
+  } else {
+    const data = bookingDoc.data();
+    bookingInfoEl.innerHTML = `
+      <p>Thank you, <b>${data.customerName}</b>!</p>
+      <p>Booking: <b>${data.itemName}</b></p>
+      <p>Date: <b>${data.date}</b> | Time: <b>${data.timeSlot}</b></p>
+      <p>Total Paid: <b>£${data.totalPrice}</b></p>
+    `;
+    new QRCode(qrBox, { text: `BOOKING:${bookingId}`, width: 120, height: 120 });
+
+    window.downloadReceipt = () => {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+      pdf.text("Harvest Havens Farm", 20, 20);
+      pdf.text(`Item: ${data.itemName}`, 20, 40);
+      pdf.text(`Date: ${data.date}`, 20, 50);
+      pdf.text(`Time: ${data.timeSlot}`, 20, 60);
+      pdf.text(`Total Paid: £${data.totalPrice}`, 20, 80);
+      pdf.text("Status: PAID", 20, 95);
+      pdf.save("HarvestHavensReceipt.pdf");
+    };
+  }
+}
+</script>
+
+<h2>Booking Confirmed ✅</h2>
+<div id="bookingInfo" class="note"></div>
+<div id="qrTicket"></div>
+<button onclick="downloadReceipt()">Download Receipt</button>
+</body>
+</html>
