@@ -536,7 +536,7 @@ bookingForm.onsubmit = async e=>{
     new QRCode(qrBox, { text: `BOOKING:${refDoc.id}`, width: 120, height: 120 });
 
   // Redirect to success page with booking ID as query param
-window.location.href = "/my-farm-booking/success.html?bookingId=" + refDoc.id;
+window.location.href = "/HarvesthaveBusiness/success.html?bookingId=" + refDoc.id;
   }catch(err){
     console.error(err);
     alert(err.message || "Booking failed");
