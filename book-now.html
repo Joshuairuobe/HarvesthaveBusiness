@@ -133,11 +133,10 @@ button:hover{background:var(--green-dark)}
       <div id="pricePreview" class="totalBox">Total: £0</div>
       <div id="priceNote" class="note"></div>
 
-      <h4>Payment (Test Mode)</h4>
-      <button type="button" class="payBtn apple"> Apple Pay</button>
-      <button type="button" class="payBtn google">Google Pay</button>
-      <button type="button" class="payBtn card">Pay with Card</button>
-
+      <h4>Secure Payment</h4>
+      <button type="button" id="payNowBtn" class="payBtn card">
+  Pay Securely
+</button>
       <div id="paymentStatus" class="note"></div>
 
       <button type="submit">Confirm Booking</button>
@@ -412,54 +411,54 @@ adultCount.oninput = childCount.oninput = seniorCount.oninput = calc;
 
 /* FAKE PAY */
 /* REAL STRIPE PAYMENT */
-document.querySelectorAll(".payBtn").forEach(btn=>{
-  btn.onclick = async ()=>{
+const payNowBtn = document.getElementById("payNowBtn");
 
-    const { total, qty } = calc();
+payNowBtn.onclick = async () => {
 
-    if(qty <= 0) return alert("Select tickets first");
-    if(total <= 0) return alert("Total is £0 — check admin prices");
-    if(!dateEl.value) return alert("Select a date first");
-    if(!timeEl.value) return alert("Select a time slot first");
+  const { total, qty } = calc();
 
-    btn.disabled = true;
-    paymentStatus.textContent = "Redirecting to secure payment…";
+  if(qty <= 0) return alert("Select tickets first");
+  if(total <= 0) return alert("Total is £0 — check admin prices");
+  if(!dateEl.value) return alert("Select a date first");
+  if(!timeEl.value) return alert("Select a time slot first");
 
-    try{
-      const response = await fetch("https://console.firebase.google.com/project/harvesthaven-97c9c/overview", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          itemName,
-          amount: total * 100, // convert £ to pence
-          date: dateEl.value,
-          timeSlot: timeEl.value,
-          tickets: {
-            adult: +adultCount.value || 0,
-            child: +childCount.value || 0,
-            senior: +seniorCount.value || 0
-          }
-        })
-      });
+  payNowBtn.disabled = true;
+  paymentStatus.textContent = "Redirecting to secure payment…";
 
-      const data = await response.json();
+  try{
+    const response = await fetch("https://us-central1-harvesthaven-97c9c.cloudfunctions.net/createCheckoutSession", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        itemName,
+        amount: total * 100,
+        date: dateEl.value,
+        timeSlot: timeEl.value,
+        tickets: {
+          adult: +adultCount.value || 0,
+          child: +childCount.value || 0,
+          senior: +seniorCount.value || 0
+        }
+      })
+    });
 
-      if(data.url){
-        window.location.href = data.url; // Redirect to Stripe
-      } else {
-        throw new Error("Stripe session failed.");
-      }
+    const data = await response.json();
 
-    }catch(err){
-      console.error(err);
-      alert("Payment failed. Try again.");
-      btn.disabled = false;
-      paymentStatus.textContent = "";
+    if(data.url){
+      window.location.href = data.url;
+    } else {
+      throw new Error("Stripe session failed");
     }
-  };
-});
+
+  }catch(err){
+    console.error(err);
+    alert("Payment failed. Try again.");
+    payNowBtn.disabled = false;
+    paymentStatus.textContent = "";
+  }
+};
 /* 🔒 SLOT RESERVATION */
 async function reserve(dateStr, slotKey, qty){
   const r = ref(rtdb, `availability/${itemId}/${dateStr}/${slotKey}`);
