@@ -414,47 +414,59 @@ adultCount.oninput = childCount.oninput = seniorCount.oninput = calc;
 const payNowBtn = document.getElementById("payNowBtn");
 
 payNowBtn.onclick = async () => {
+  const { total, qty, a, c, s } = calc();
 
-  const { total, qty } = calc();
-
-  if(qty <= 0) return alert("Select tickets first");
-  if(total <= 0) return alert("Total is £0 — check admin prices");
-  if(!dateEl.value) return alert("Select a date first");
-  if(!timeEl.value) return alert("Select a time slot first");
+  // ✅ Basic validations
+  if (qty <= 0) return alert("Select at least one ticket");
+  if (total <= 0) return alert("Total is £0 — check admin prices");
+  if (!dateEl.value) return alert("Select a date first");
+  if (!timeEl.value) return alert("Select a time slot first");
 
   payNowBtn.disabled = true;
   paymentStatus.textContent = "Redirecting to secure payment…";
 
-  try{
-    const response = await fetch("https://createcheckoutsession-6fgozcf3nq-uc.a.run.app", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        itemName,
-        amount: total * 100,
-        date: dateEl.value,
-        timeSlot: timeEl.value,
-        tickets: {
-          adult: +adultCount.value || 0,
-          child: +childCount.value || 0,
-          senior: +seniorCount.value || 0
-        }
-      })
-    });
+  // Build payload
+  const payload = {
+    itemName,
+    amount: Math.round(total * 100), // Stripe expects integer
+    date: dateEl.value,
+    timeSlot: timeEl.value,
+    tickets: { adult: a, child: c, senior: s },
+    userEmail: auth.currentUser?.email || "unknown"
+  };
 
-    const data = await response.json();
+  console.log("Creating Stripe session with payload:", payload);
 
-    if(data.url){
-      window.location.href = data.url;
-    } else {
-      throw new Error("Stripe session failed");
+  try {
+    const response = await fetch(
+      "https://createcheckoutsession-6fgozcf3nq-uc.a.run.app",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("Stripe backend returned error:", response.status, text);
+      throw new Error(`Payment server error: ${response.status}`);
     }
 
-  }catch(err){
-    console.error(err);
-    alert("Payment failed. Try again.");
+    const data = await response.json();
+    console.log("Stripe session response:", data);
+
+    if (data?.url) {
+      // Optional: save booking as "pending" before redirect
+      paymentStatus.textContent = "Redirecting to payment...";
+      window.location.href = data.url;
+    } else {
+      console.error("Stripe session missing URL:", data);
+      throw new Error("Failed to create Stripe session. Try again.");
+    }
+  } catch (err) {
+    console.error("Payment error:", err);
+    alert("Payment failed. See console for details.");
     payNowBtn.disabled = false;
     paymentStatus.textContent = "";
   }
