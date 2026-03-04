@@ -180,6 +180,8 @@ const rtdb = getDatabase(app);
 const p = new URLSearchParams(location.search);
 const itemName = p.get("item");
 const type = p.get("type");
+const paymentStatusParam = p.get("payment");
+const returnedSessionId = p.get("session_id");
 
 if (!itemName || !type) {
   alert("Invalid booking link");
@@ -208,63 +210,64 @@ const nameEl = document.getElementById("name");
 const adultCount = document.getElementById("adultCount");
 const childCount = document.getElementById("childCount");
 const seniorCount = document.getElementById("seniorCount");
+const payNowBtn = document.getElementById("payNowBtn");
 
 /* UI TEXT */
 titleEl.textContent = itemName;
 subtitleEl.textContent = type === "event" ? "Event Booking" : "Attraction Booking";
 
-/* Redirect helper (keeps return URL) */
+/* Redirect helper */
 function goLogin(){
   const returnUrl = encodeURIComponent(location.href);
   location.href = `login.html?return=${returnUrl}`;
 }
 
-/* ✅ AUTH GATE (must be signed in + email verified + profile complete) */
+/* STATE */
+let prices = { adult:15, child:8, senior:10 };
+let capacity = 100;
+let slots = {};
+let bookingCompleted = false;
+
+/* AUTH */
 onAuthStateChanged(auth, async (u) => {
   if(!u) return goLogin();
 
-  // block admin from booking
   if(u.email === "harvesthaven10@harvesthaven.com"){
     alert("Admin accounts cannot make bookings.");
     location.href = "admin.html";
     return;
   }
 
-  // must verify email
   if(!u.emailVerified){
-    alert("Please verify your email first. We just sent you a verification email when you signed up.");
+    alert("Please verify your email first.");
     await signOut(auth);
     return goLogin();
   }
 
-  // must have profile (name + phone + phoneVerified)
   const userDoc = await getDoc(doc(db, "users", u.uid));
   const profile = userDoc.exists() ? userDoc.data() : null;
 
   if(!profile || !profile.name || !profile.phone || profile.phoneVerified !== true){
-    alert("Your account setup is incomplete. Please complete sign up (name + phone verification).");
+    alert("Your account setup is incomplete. Please complete sign up.");
     await signOut(auth);
     return location.href = `signup.html?return=${encodeURIComponent(location.href)}`;
   }
 
   userLabel.textContent = `Logged in as ${u.email}`;
-  // prefill name from profile
   nameEl.value = profile.name || "";
 
-  // Now load item + continue
   await loadItemFromRTDB();
+
+  /* if user returned from Stripe success */
+  if (paymentStatusParam === "success" || returnedSessionId) {
+    await completeBookingAfterPayment();
+  }
 });
 
 /* Logout */
 logoutBtn.onclick = ()=> signOut(auth).then(goLogin);
 
-/* STATE */
-let prices = { adult:15, child:8, senior:10 };
-let capacity = 100;
-let slots = {};
-let paid = false;
-
-/* ✅ LOAD ITEM (RTDB) — expects your newer structure too */
+/* LOAD ITEM */
 async function loadItemFromRTDB(){
   const itemSnap = await get(ref(rtdb, `items/${itemId}`));
 
@@ -275,14 +278,11 @@ async function loadItemFromRTDB(){
   }
 
   const d = itemSnap.val();
-  prices   = d.pricing || prices;
-  capacity = Number(d.capacity) || capacity;
+  prices = d.pricing || prices;
+  capacity = Number(d.capacity) || 100;
 
-  // ✅ Support NEW: weeklySlots + dateOverrides
   const weeklySlots = d.weeklySlots || null;
   const dateOverrides = d.dateOverrides || null;
-
-  // ✅ Backward compatibility (old)
   const oldDateSlots = d.dateSlots || {};
   const oldDefaultSlots = d.timeSlots || {};
 
@@ -293,9 +293,10 @@ async function loadItemFromRTDB(){
   priceNote.textContent =
     `Prices — Adult £${prices.adult}, Child £${prices.child}, Senior £${prices.senior}`;
 
-  renderSlots();
+  await renderSlots();
   calc();
 }
+
 async function fetchSlotsForDate(dateStr){
   if (!dateStr) return;
 
@@ -303,43 +304,20 @@ async function fetchSlotsForDate(dateStr){
   if (!itemSnap.exists()) return;
 
   const d = itemSnap.val();
-  const weeklySlots = d.weeklySlots || {};
-  const dateOverrides = d.dateOverrides || {};
+  slots.weeklySlots = d.weeklySlots || {};
+  slots.dateOverrides = d.dateOverrides || {};
 
-  slots.weeklySlots = weeklySlots;
-  slots.dateOverrides = dateOverrides;
-
-  renderSlots();
+  await renderSlots();
 }
 
-// then on date change:
 dateEl.onchange = async () => {
   await fetchSlotsForDate(dateEl.value);
 };
-/* DATE -> weekday key */
+
 function weekdayKeyFromDate(dateStr){
-  const day = new Date(dateStr + "T00:00:00").getDay(); // 0 Sun ... 6 Sat
+  const day = new Date(dateStr + "T00:00:00").getDay();
   return ["sun","mon","tue","wed","thu","fri","sat"][day];
 }
-
-/* SLOT EXPIRED */
-function isSlotExpired(dateStr, slotKey){
-  if (!dateStr) return false;
-  const start = slotKey.split("-")[0].trim();
-  const slotStart = new Date(`${dateStr}T${start}:00`);
-  return slotStart < new Date();
-}
-
-dateEl.onchange = async () => {
-  const itemSnap = await get(ref(rtdb, `items/${itemId}`));
-  if (!itemSnap.exists()) return;
-
-  const d = itemSnap.val();
-  slots.weeklySlots = d.weeklySlots || {};
-  slots.dateOverrides = d.dateOverrides || {};
-  
-  renderSlots(); // show updated slots
-};
 
 async function renderSlots() {
   timeEl.innerHTML = `<option value="">Select time slot</option>`;
@@ -347,10 +325,8 @@ async function renderSlots() {
 
   const dateStr = dateEl.value;
   const dayKey = weekdayKeyFromDate(dateStr);
-
   const slotList = [];
 
-  // 1️⃣ Date Overrides (highest priority)
   const override = slots?.dateOverrides?.[dateStr];
   if (override) {
     for (const [slotKey, v] of Object.entries(override)) {
@@ -358,43 +334,55 @@ async function renderSlots() {
     }
   }
 
-  // 2️⃣ Weekly Slots (if no override)
   if (!slotList.length && slots?.weeklySlots?.[dayKey]) {
     for (const [slotKey, v] of Object.entries(slots.weeklySlots[dayKey])) {
       if (v?.enabled) slotList.push({ slotKey, start: v.start, end: v.end });
     }
   }
 
-  // 3️⃣ Old Date Slots (backward compatibility)
   if (!slotList.length && slots?.oldDateSlots?.[dateStr]) {
     for (const [slotKey, v] of Object.entries(slots.oldDateSlots[dateStr])) {
-      if (v?.enabled) slotList.push({ slotKey, start: v.start ?? slotKey.split("-")[0], end: v.end ?? slotKey.split("-")[1] });
+      if (v?.enabled) {
+        slotList.push({
+          slotKey,
+          start: v.start ?? slotKey.split("-")[0],
+          end: v.end ?? slotKey.split("-")[1]
+        });
+      }
     }
   }
 
-  // 4️⃣ Default old slots
   if (!slotList.length && slots?.oldDefaultSlots) {
     for (const [slotKey, v] of Object.entries(slots.oldDefaultSlots)) {
-      if (v?.enabled) slotList.push({ slotKey, start: v.start ?? slotKey.split("-")[0], end: v.end ?? slotKey.split("-")[1] });
+      if (v?.enabled) {
+        slotList.push({
+          slotKey,
+          start: v.start ?? slotKey.split("-")[0],
+          end: v.end ?? slotKey.split("-")[1]
+        });
+      }
     }
   }
 
-  // Append available slots to dropdown
   for (const s of slotList) {
     const snap = await get(ref(rtdb, `availability/${itemId}/${dateStr}/${s.slotKey}`));
     const booked = snap.exists() ? Number(snap.val().booked || 0) : 0;
-    const remaining = Math.max(0, capacity - booked);
-    if (remaining <= 0) continue; // skip fully booked
+    const max = snap.exists() && snap.val().max != null ? Number(snap.val().max) : capacity;
+    const remaining = Math.max(0, max - booked);
+
+    if (remaining <= 0) continue;
+
     const o = document.createElement("option");
     o.value = s.slotKey;
     o.textContent = `${s.start}–${s.end} (${remaining} left)`;
     timeEl.appendChild(o);
   }
 
- if (timeEl.options.length <= 1) {
-  timeEl.innerHTML = `<option value="">No slots available for this date</option>`;
+  if (timeEl.options.length <= 1) {
+    timeEl.innerHTML = `<option value="">No slots available for this date</option>`;
+  }
 }
-}
+
 /* TOTAL */
 function calc(){
   const a = +adultCount.value || 0;
@@ -408,33 +396,42 @@ function calc(){
 }
 adultCount.oninput = childCount.oninput = seniorCount.oninput = calc;
 
-/* FAKE PAY */
-/* REAL STRIPE PAYMENT */
-const payNowBtn = document.getElementById("payNowBtn");
-
+/* START STRIPE */
 payNowBtn.onclick = async () => {
   const { total, qty, a, c, s } = calc();
 
-  // ✅ Basic validations
   if (qty <= 0) return alert("Select at least one ticket");
   if (total <= 0) return alert("Total is £0 — check admin prices");
   if (!dateEl.value) return alert("Select a date first");
   if (!timeEl.value) return alert("Select a time slot first");
+  if (!nameEl.value.trim()) return alert("Please enter your name");
 
   payNowBtn.disabled = true;
   paymentStatus.textContent = "Redirecting to secure payment…";
 
-  // Build payload
-  const payload = {
+  const pendingBooking = {
+    itemId,
     itemName,
-    amount: Math.round(total * 100), // Stripe expects integer
+    type,
+    customerName: nameEl.value.trim(),
     date: dateEl.value,
     timeSlot: timeEl.value,
     tickets: { adult: a, child: c, senior: s },
-    userEmail: auth.currentUser?.email || "unknown"
+    totalPrice: total
   };
 
-  console.log("Creating Stripe session with payload:", payload);
+  localStorage.setItem("pendingBooking", JSON.stringify(pendingBooking));
+
+  const payload = {
+    itemName,
+    amount: Math.round(total * 100),
+    date: dateEl.value,
+    timeSlot: timeEl.value,
+    tickets: { adult: a, child: c, senior: s },
+    userEmail: auth.currentUser?.email || "unknown",
+    successUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=success`,
+    cancelUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=cancelled`
+  };
 
   try {
     const response = await fetch(
@@ -448,20 +445,15 @@ payNowBtn.onclick = async () => {
 
     if (!response.ok) {
       const text = await response.text();
-      console.error("Stripe backend returned error:", response.status, text);
-      throw new Error(`Payment server error: ${response.status}`);
+      throw new Error(`Payment server error: ${response.status} ${text}`);
     }
 
     const data = await response.json();
-    console.log("Stripe session response:", data);
 
     if (data?.url) {
-      // Optional: save booking as "pending" before redirect
-      paymentStatus.textContent = "Redirecting to payment...";
       window.location.href = data.url;
     } else {
-      console.error("Stripe session missing URL:", data);
-      throw new Error("Failed to create Stripe session. Try again.");
+      throw new Error("Failed to create Stripe session.");
     }
   } catch (err) {
     console.error("Payment error:", err);
@@ -470,78 +462,91 @@ payNowBtn.onclick = async () => {
     paymentStatus.textContent = "";
   }
 };
-/* 🔒 SLOT RESERVATION */
+
+/* RESERVE SLOT */
 async function reserve(dateStr, slotKey, qty){
   const r = ref(rtdb, `availability/${itemId}/${dateStr}/${slotKey}`);
 
-  await runTransaction(r, current => {
-  if (!current) return { booked: qty, max: capacity };
+  const result = await runTransaction(r, current => {
+    const existing = current || {};
+    const booked = Number(existing.booked || 0);
+    const max = Number(existing.max ?? capacity);
 
-  const booked = Number(current.booked) || 0;
-  const max = Number(current.max);
+    if (booked + qty > max) {
+      return;
+    }
 
-  if (booked + qty > max) return;
-
-  return { ...current, booked: booked + qty };
-});
+    return {
+      ...existing,
+      max,
+      booked: booked + qty
+    };
+  });
 
   if (!result.committed){
     throw new Error("This time slot is fully booked. Please pick another slot.");
   }
 }
 
-/* SUBMIT */
-bookingForm.onsubmit = async e=>{
-  e.preventDefault();
+/* COMPLETE AFTER PAYMENT */
+async function completeBookingAfterPayment() {
+  if (bookingCompleted) return;
 
-  if(!dateEl.value) return alert("Select a date");
-  if(!timeEl.value) return alert("Select a valid time slot");
-
-  const dayKey = weekdayKeyFromDate(dateEl.value);
-  const liveOverride = slots?.dateOverrides?.[dateEl.value]?.[timeEl.value];
-  const liveWeekly = slots?.weeklySlots?.[dayKey]?.[timeEl.value];
-
-  if (liveOverride && liveOverride.enabled !== true) {
-    return alert("This slot is no longer available. Please refresh.");
+  const raw = localStorage.getItem("pendingBooking");
+  if (!raw) {
+    paymentStatus.textContent = "Payment returned, but no pending booking was found.";
+    return;
   }
 
-  if (!liveOverride && liveWeekly && liveWeekly.enabled !== true) {
-    return alert("This slot is no longer available. Please refresh.");
-  }
+  const pending = JSON.parse(raw);
+  const qty =
+    Number(pending.tickets?.adult || 0) +
+    Number(pending.tickets?.child || 0) +
+    Number(pending.tickets?.senior || 0);
 
-  const { total, qty, a, c, s } = calc();
+  try {
+    paymentStatus.textContent = "Finalising your booking…";
 
-  if(!nameEl.value.trim()) return alert("Please enter your name");
-  if(qty <= 0) return alert("Select at least 1 ticket");
-
-  try{
-    await loadItemFromRTDB(); // refresh live slots + capacity
-    await reserve(dateEl.value, timeEl.value, qty);
+    await loadItemFromRTDB();
+    await reserve(pending.date, pending.timeSlot, qty);
 
     const refDoc = await addDoc(collection(db, "bookings"), {
       userId: auth.currentUser.uid,
-      customerName: nameEl.value.trim(),
-      itemId,
-      itemName,
-      type,
-      date: dateEl.value,
-      timeSlot: timeEl.value,
-      tickets: { adult: a, child: c, senior: s },
-      totalPrice: total,
+      customerName: pending.customerName,
+      itemId: pending.itemId,
+      itemName: pending.itemName,
+      type: pending.type,
+      date: pending.date,
+      timeSlot: pending.timeSlot,
+      tickets: pending.tickets,
+      totalPrice: pending.totalPrice,
       status: "paid",
+      stripeSessionId: returnedSessionId || null,
       createdAt: serverTimestamp()
     });
 
-    qrBox.innerHTML = "";
-    new QRCode(qrBox, { text: `BOOKING:${refDoc.id}`, width: 120, height: 120 });
+    bookingCompleted = true;
+    localStorage.removeItem("pendingBooking");
 
-  // Redirect to success page with booking ID as query param
-window.location.href = "/HarvesthaveBusiness/success.html?bookingId=" + refDoc.id;
-  }catch(err){
+    bookingForm.classList.add("hidden");
+    successMsg.classList.remove("hidden");
+    paymentStatus.textContent = "";
+
+    qrBox.innerHTML = "";
+    new QRCode(qrBox, {
+      text: `BOOKING:${refDoc.id}`,
+      width: 120,
+      height: 120
+    });
+
+    history.replaceState({}, "", `${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&bookingSuccess=1`);
+  } catch (err) {
     console.error(err);
-    alert(err.message || "Booking failed");
+    paymentStatus.textContent = "";
+    alert(err.message || "Booking finalisation failed");
   }
-};
+}
+
 /* PDF */
 window.downloadReceipt = ()=>{
   const { jsPDF } = window.jspdf;
@@ -551,10 +556,9 @@ window.downloadReceipt = ()=>{
   pdf.text(`Date: ${dateEl.value || ""}`,20,50);
   pdf.text(`Time: ${timeEl.value || ""}`,20,60);
   pdf.text(`Total Paid: £${pricePreview.textContent.replace("Total: £","")}`,20,80);
-  pdf.text("Status: PAID (Test Mode)",20,95);
+  pdf.text("Status: PAID",20,95);
   pdf.save("HarvestHavensReceipt.pdf");
 };
 </script>
-
 </body>
 </html>
