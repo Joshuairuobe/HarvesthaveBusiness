@@ -82,7 +82,6 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
 
     <hr>
 
-    <!-- ✅ WEEKLY (DAY-OF-WEEK) SLOTS -->
     <h3>Weekly Slots (customers can book on any date)</h3>
     <p class="small">
       Choose a weekday, then add slots for that weekday. Bookings will use the selected date’s weekday slots.
@@ -124,7 +123,6 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
 
     <hr>
 
-    <!-- ✅ DATE OVERRIDES -->
     <h3>Date Overrides (optional)</h3>
     <p class="small">
       If you add slots for a specific date, they will override weekly slots for that date only.
@@ -155,6 +153,11 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
     <h3>📊 Booking Calendar</h3>
     <input type="date" id="calendarDate">
     <div id="calendarResults"></div>
+
+    <hr>
+
+    <h3>💳 Paid Bookings</h3>
+    <div id="paidBookingsResults" class="small">Choose a date to view paid bookings.</div>
   </div>
 
   <div class="card">
@@ -172,7 +175,6 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
 </div>
 
 <script type="module">
-  
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getAuth,
@@ -191,16 +193,20 @@ import {
   remove
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import {
-  getStorage,
-  ref as sRef,
-  uploadBytes,
-  getDownloadURL
+  getStorage
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  query,
+  where
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const ADMIN_EMAIL = "harvesthaven10@harvesthaven.com";
 const CLOUD_NAME = "dpdhtdbpu";
 const UPLOAD_PRESET = "harvest_havens_upload";
-/* ✅ Firebase init */
+
 const app = initializeApp({
   apiKey: "AIzaSyDjNcMWpJ8zO2j0Z4vH8GOFPHK2Tt8pOF4",
   authDomain: "harvesthaven-97c9c.firebaseapp.com",
@@ -214,8 +220,9 @@ const app = initializeApp({
 const auth = getAuth(app);
 const rtdb = getDatabase(app);
 const storage = getStorage(app);
+const db = getFirestore(app);
 
-/* ✅ DOM refs */
+/* DOM refs */
 const loginBox = document.getElementById("loginBox");
 const adminBox = document.getElementById("adminBox");
 const liveAttractionsList = document.getElementById("liveAttractionsList");
@@ -245,6 +252,7 @@ const saveBtn = document.getElementById("saveBtn");
 
 const calendarDate = document.getElementById("calendarDate");
 const calendarResults = document.getElementById("calendarResults");
+const paidBookingsResults = document.getElementById("paidBookingsResults");
 
 const customStart = document.getElementById("customStart");
 const customEnd = document.getElementById("customEnd");
@@ -258,7 +266,7 @@ const addDateSlotBtn = document.getElementById("addDateSlotBtn");
 const clearDateSlotsBtn = document.getElementById("clearDateSlotsBtn");
 const dateSlotList = document.getElementById("dateSlotList");
 
-/* ✅ Helpers */
+/* Helpers */
 const slug = (s) => String(s || "")
   .toLowerCase()
   .trim()
@@ -268,19 +276,15 @@ const slug = (s) => String(s || "")
 const WEEK_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
 const WEEK_LABEL = {mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",sun:"Sun"};
 
-/* ✅ State
-  weeklySlots: { mon:{ "10:00-13:00":{start,end,enabled} }, tue:{...}, ... }
-  dateOverrides: { "2026-02-24": { "10:00-13:00":{start,end,enabled} } }
-*/
 let weeklySlots = {};
 let dateOverrides = {};
 let stopItemsListener = null;
 
-/* ✅ Ensure structure exists */
 function ensureWeeklySlots(){
   if(!weeklySlots || typeof weeklySlots !== "object") weeklySlots = {};
   WEEK_KEYS.forEach(k => { if(!weeklySlots[k]) weeklySlots[k] = {}; });
 }
+
 async function uploadToCloudinary(file){
   const form = new FormData();
   form.append("file", file);
@@ -295,7 +299,7 @@ async function uploadToCloudinary(file){
   if (!data.secure_url) throw new Error("Cloudinary upload failed");
   return data.secure_url;
 }
-/* ✅ Render weekly slots for selected weekday */
+
 function renderWeeklySlots(){
   ensureWeeklySlots();
   const dayKey = slotDayEl.value;
@@ -338,7 +342,6 @@ function renderWeeklySlots(){
 
 slotDayEl.onchange = renderWeeklySlots;
 
-/* ✅ Add preset to selected weekday */
 addSlotBtn.onclick = () => {
   ensureWeeklySlots();
   if(!slotPreset.value) return;
@@ -352,7 +355,6 @@ addSlotBtn.onclick = () => {
   renderWeeklySlots();
 };
 
-/* ✅ Add custom slot to selected weekday */
 addCustomSlot.onclick = () => {
   ensureWeeklySlots();
   const dayKey = slotDayEl.value;
@@ -378,7 +380,6 @@ addCustomSlot.onclick = () => {
   renderWeeklySlots();
 };
 
-/* ✅ Clear selected weekday */
 clearDayBtn.onclick = () => {
   ensureWeeklySlots();
   const dayKey = slotDayEl.value;
@@ -387,7 +388,6 @@ clearDayBtn.onclick = () => {
   renderWeeklySlots();
 };
 
-/* ✅ Date Overrides render */
 function renderDateSlots(){
   const d = slotDateEl.value;
   if(!d){
@@ -460,7 +460,6 @@ clearDateSlotsBtn.onclick = () => {
   renderDateSlots();
 };
 
-/* ✅ Login/Register */
 loginBtn.onclick = async () => {
   const email = emailEl.value.trim();
   const pass = passwordEl.value;
@@ -475,7 +474,6 @@ loginBtn.onclick = async () => {
 
 logoutBtn.onclick = () => signOut(auth);
 
-/* ✅ Load items dropdown */
 async function loadItemsDropdown(){
   const snap = await get(child(ref(rtdb), "items"));
   existingItems.innerHTML = `<option value="">— Select existing item —</option>`;
@@ -489,7 +487,6 @@ async function loadItemsDropdown(){
   });
 }
 
-/* ✅ Auth gate */
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     loginBox.classList.remove("hidden");
@@ -497,19 +494,14 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  // Check if the user is an admin
-  if (user.email !== ADMIN_EMAIL) {   // or !ADMIN_EMAILS.includes(user.email) for multiple admins
+  if (user.email !== ADMIN_EMAIL) {
     alert("Not authorized. Admins must use the admin panel.");
     await signOut(auth);
     loginBox.classList.remove("hidden");
     adminBox.classList.add("hidden");
     return;
   }
-if (!user || user.email !== ADMIN_EMAIL) {
-    alert("Access denied. Admins only.");
-    location.href = "login.html"; // or home page
-}
-  // Admin is logged in
+
   loginBox.classList.add("hidden");
   adminBox.classList.remove("hidden");
 
@@ -526,12 +518,8 @@ if (!user || user.email !== ADMIN_EMAIL) {
   renderWeeklySlots();
   renderDateSlots();
 });
-/* ✅ Migration helper:
-   - If item has old `timeSlots` (same every day), copy to all weekdays.
-   - If item has old `dateSlots`, map it to new `dateOverrides`.
-*/
+
 function migrateOldToNew(d){
-  // weeklySlots:
   if(d?.weeklySlots && typeof d.weeklySlots === "object"){
     weeklySlots = d.weeklySlots;
     ensureWeeklySlots();
@@ -546,15 +534,13 @@ function migrateOldToNew(d){
     }
   }
 
-  // dateOverrides:
   if(d?.dateOverrides && typeof d.dateOverrides === "object"){
     dateOverrides = d.dateOverrides;
   } else {
-    dateOverrides = d?.dateSlots || {}; // old name -> new
+    dateOverrides = d?.dateSlots || {};
   }
 }
 
-/* ✅ Selecting existing item fills the form */
 existingItems.onchange = async () => {
   const id = existingItems.value;
   if(!id) return;
@@ -572,12 +558,10 @@ existingItems.onchange = async () => {
 
   migrateOldToNew(d);
 
-  // refresh UI
   renderWeeklySlots();
   renderDateSlots();
 };
 
-/* ✅ Save item (RTDB + optional Storage upload) */
 saveBtn.onclick = async () => {
   try {
     const name = nameEl.value.trim();
@@ -585,11 +569,9 @@ saveBtn.onclick = async () => {
 
     const itemId = `${typeEl.value}_${slug(name)}`;
 
-    // Get existing item
     const existingSnap = await get(child(ref(rtdb), `items/${itemId}`));
     let newImageUrl = existingSnap.exists() ? existingSnap.val()?.image || "" : "";
 
-    // Upload new image if selected
     if (imageFile.files[0]) {
       newImageUrl = await uploadToCloudinary(imageFile.files[0]);
     }
@@ -608,7 +590,6 @@ saveBtn.onclick = async () => {
       updatedAt: Date.now()
     };
 
-    // only overwrite image if new one selected
     if (newImageUrl) {
       updates.image = newImageUrl;
     }
@@ -625,34 +606,84 @@ saveBtn.onclick = async () => {
   }
 };
 
-/* ✅ Booking Calendar (reads RTDB availability) */
 calendarDate.onchange = async () => {
   const date = calendarDate.value;
-  if(!date) return;
+  if (!date) return;
 
   calendarResults.innerHTML = "Loading…";
-  let html = "";
+  paidBookingsResults.innerHTML = "Loading…";
 
-  const availSnap = await get(child(ref(rtdb), "availability"));
-  if(availSnap.exists()){
-    Object.entries(availSnap.val()).forEach(([itemId, dates]) => {
-      if(!dates?.[date]) return;
+  try {
+    let html = "";
+    const availSnap = await get(child(ref(rtdb), "availability"));
 
-      html += `<h4>${itemId.replace(/_/g," ").toUpperCase()}</h4>`;
-      Object.entries(dates[date]).forEach(([slot, info]) => {
-        html += `
-          <div class="booking-card">
-            ⏱ ${slot} → ${info.booked}/${info.max} booked
-          </div>
-        `;
+    if (availSnap.exists()) {
+      Object.entries(availSnap.val()).forEach(([itemId, dates]) => {
+        if (!dates?.[date]) return;
+
+        html += `<h4>${itemId.replace(/_/g," ").toUpperCase()}</h4>`;
+        Object.entries(dates[date]).forEach(([slot, info]) => {
+          const booked = Number(info?.booked || 0);
+          const max = Number(info?.max || 0);
+          const remaining = Math.max(0, max - booked);
+
+          html += `
+            <div class="booking-card">
+              <div><strong>⏱ ${slot}</strong></div>
+              <div class="small">Booked: ${booked}/${max}</div>
+              <div class="small">Remaining: ${remaining}</div>
+            </div>
+          `;
+        });
       });
-    });
-  }
+    }
 
-  calendarResults.innerHTML = html || "No bookings for this date.";
+    calendarResults.innerHTML = html || "No slot usage for this date.";
+
+    const q = query(
+      collection(db, "bookings"),
+      where("date", "==", date)
+    );
+
+    const bookingSnap = await getDocs(q);
+
+    if (bookingSnap.empty) {
+      paidBookingsResults.innerHTML = "No paid bookings for this date.";
+      return;
+    }
+
+    let bookingsHtml = "";
+    bookingSnap.forEach(docSnap => {
+      const b = docSnap.data();
+      const tickets = b.tickets || {};
+      const totalPeople =
+        Number(tickets.adult || 0) +
+        Number(tickets.child || 0) +
+        Number(tickets.senior || 0);
+
+      bookingsHtml += `
+        <div class="booking-card">
+          <div><strong>${b.itemName || "Unnamed item"}</strong></div>
+          <div class="small">Customer: ${b.customerName || "Unknown"}</div>
+          <div class="small">Time: ${b.timeSlot || "-"}</div>
+          <div class="small">Tickets — Adults: ${tickets.adult || 0}, Children: ${tickets.child || 0}, Seniors: ${tickets.senior || 0}</div>
+          <div class="small">People total: ${totalPeople}</div>
+          <div class="small">Paid: £${b.totalPrice || 0}</div>
+          <div class="small">Status: ${b.status || "unknown"}</div>
+          <div class="small" style="opacity:.7">Booking ID: ${docSnap.id}</div>
+        </div>
+      `;
+    });
+
+    paidBookingsResults.innerHTML = bookingsHtml;
+
+  } catch (err) {
+    console.error(err);
+    calendarResults.innerHTML = "Failed to load booking calendar.";
+    paidBookingsResults.innerHTML = "Failed to load paid bookings.";
+  }
 };
 
-/* Live lists */
 function countEnabledSlotsInWeek(item){
   const w = item?.weeklySlots;
   if(!w) return 0;
@@ -727,9 +758,6 @@ function renderAttractionsLive(itemsObj){
   });
 }
 
-
-
-saveBtn.onclick = saveItem;
 function renderEventsLive(itemsObj){
   const entries = Object.entries(itemsObj || {})
     .filter(([_, item]) => item?.type === "event");
@@ -794,11 +822,9 @@ function renderEventsLive(itemsObj){
   });
 }
 
-/* initial */
 ensureWeeklySlots();
 renderWeeklySlots();
 renderDateSlots();
-
 </script>
 </body>
 </html>
