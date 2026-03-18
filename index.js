@@ -26,7 +26,7 @@ app.post("/", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=success",
+     success_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=success&test=NEW",
 cancel_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=cancelled",
     });
 
