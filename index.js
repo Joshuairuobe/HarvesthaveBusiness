@@ -9,7 +9,7 @@ app.use(express.json());
 
 app.post("/", async (req, res) => {
   try {
-    const { amount, itemName } = req.body;
+    const { amount, itemName, type } = req.body;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -26,14 +26,15 @@ app.post("/", async (req, res) => {
         },
       ],
       mode: "payment",
-     success_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=success&test=NEW",
-cancel_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=cancelled",
+      success_url: `https://joshuairuobe.github.io/HarvesthaveBusiness/success.html?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}`,
+      cancel_url: `https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=cancelled`,
     });
 
     res.status(200).json({ url: session.url });
-
   } catch (error) {
     console.error("Stripe error:", error);
     res.status(500).json({ error: error.message });
   }
 });
+
+exports.createCheckoutSession = onRequest(app);
