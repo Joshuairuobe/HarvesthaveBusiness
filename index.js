@@ -26,8 +26,8 @@ app.post("/", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      success_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=success",
+cancel_url: "https://joshuairuobe.github.io/HarvesthaveBusiness/book-now.html?payment=cancelled",
     });
 
     res.status(200).json({ url: session.url });
