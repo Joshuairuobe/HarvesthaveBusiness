@@ -321,7 +321,12 @@ function weekdayKeyFromDate(dateStr){
 }
 function isPastSlot(dateStr, startTime){
   const now = new Date();
-  const slotStart = new Date(`${dateStr}T${startTime}:00`);
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = startTime.split(":").map(Number);
+
+  const slotStart = new Date(year, month - 1, day, hour, minute, 0);
+
   return slotStart <= now;
 }
 async function renderSlots() {
