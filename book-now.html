@@ -211,7 +211,8 @@ const adultCount = document.getElementById("adultCount");
 const childCount = document.getElementById("childCount");
 const seniorCount = document.getElementById("seniorCount");
 const payNowBtn = document.getElementById("payNowBtn");
-
+const today = new Date().toISOString().split("T")[0];
+dateEl.min = today;
 /* UI TEXT */
 titleEl.textContent = itemName;
 subtitleEl.textContent = type === "event" ? "Event Booking" : "Attraction Booking";
@@ -311,18 +312,18 @@ async function fetchSlotsForDate(dateStr){
 }
 
 dateEl.onchange = async () => {
+  timeEl.value = "";
   await fetchSlotsForDate(dateEl.value);
 };
-
 function weekdayKeyFromDate(dateStr){
   const day = new Date(dateStr + "T00:00:00").getDay();
   return ["sun","mon","tue","wed","thu","fri","sat"][day];
 }
 
 async function renderSlots() {
-  timeEl.innerHTML = `<option value="">Select time slot</option>`;
-  if (!dateEl.value) return;
-
+  timeEl.innerHTML = `<option value="">Select a date first</option>`;
+if (!dateEl.value) return;
+timeEl.innerHTML = `<option value="">Select time slot</option>`;
   const dateStr = dateEl.value;
   const dayKey = weekdayKeyFromDate(dateStr);
   const slotList = [];
@@ -374,7 +375,7 @@ async function renderSlots() {
 
     const o = document.createElement("option");
     o.value = s.slotKey;
-    o.textContent = `${s.start}–${s.end} (${remaining} left)`;
+    o.textContent = `${s.start}–${s.end} — ${remaining} spaces left`;
     timeEl.appendChild(o);
   }
 
@@ -400,6 +401,9 @@ adultCount.oninput = childCount.oninput = seniorCount.oninput = calc;
 payNowBtn.onclick = async () => {
   const { total, qty, a, c, s } = calc();
 
+  if (qty > capacity) {
+    return alert(`You cannot book more than ${capacity} people in one booking.`);
+  }
   if (qty <= 0) return alert("Select at least one ticket");
   if (total <= 0) return alert("Total is £0 — check admin prices");
   if (!dateEl.value) return alert("Select a date first");
@@ -409,31 +413,51 @@ payNowBtn.onclick = async () => {
   payNowBtn.disabled = true;
   paymentStatus.textContent = "Redirecting to secure payment…";
 
-  const pendingBooking = {
-    itemId,
-    itemName,
-    type,
-    customerName: nameEl.value.trim(),
-    date: dateEl.value,
-    timeSlot: timeEl.value,
-    tickets: { adult: a, child: c, senior: s },
-    totalPrice: total
-  };
-
-  localStorage.setItem("pendingBooking", JSON.stringify(pendingBooking));
-
-  const payload = {
-    itemName,
-    amount: Math.round(total * 100),
-    date: dateEl.value,
-    timeSlot: timeEl.value,
-    tickets: { adult: a, child: c, senior: s },
-    userEmail: auth.currentUser?.email || "unknown",
-    successUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=success`,
-    cancelUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=cancelled`
-  };
-
   try {
+    /* ✅ STEP 1: CHECK AVAILABILITY SAFELY */
+    const slotSnap = await get(ref(rtdb, `availability/${itemId}/${dateEl.value}/${timeEl.value}`));
+
+    if (slotSnap.exists()) {
+      const booked = Number(slotSnap.val().booked || 0);
+      const max = slotSnap.val().max != null ? Number(slotSnap.val().max) : Number(capacity);
+      const remaining = Math.max(0, max - booked);
+
+      if (qty > remaining) {
+        payNowBtn.disabled = false;
+        paymentStatus.textContent = "";
+        return alert(`Only ${remaining} spaces left for this slot.`);
+      }
+    }
+
+    /* ✅ STEP 2: SAVE TEMP BOOKING */
+    const pendingBooking = {
+      itemId,
+      itemName,
+      type,
+      customerName: nameEl.value.trim(),
+      date: dateEl.value,
+      timeSlot: timeEl.value,
+      tickets: { adult: a, child: c, senior: s },
+      totalPrice: total
+    };
+
+    localStorage.setItem("pendingBooking", JSON.stringify(pendingBooking));
+
+    /* ✅ STEP 3: PREPARE PAYMENT PAYLOAD */
+    const payload = {
+      itemName,
+      amount: Math.round(total * 100),
+      date: dateEl.value,
+      timeSlot: timeEl.value,
+      tickets: { adult: a, child: c, senior: s },
+      userEmail: auth.currentUser?.email || "unknown",
+      successUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=success`,
+      cancelUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=cancelled`
+    };
+
+    console.log("🔵 Sending payment payload:", payload);
+
+    /* ✅ STEP 4: CALL PAYMENT SERVER */
     const response = await fetch(
       "https://createcheckoutsession-6fgozcf3nq-uc.a.run.app",
       {
@@ -443,21 +467,33 @@ payNowBtn.onclick = async () => {
       }
     );
 
+    console.log("🟡 Response status:", response.status);
+
+    const rawText = await response.text();
+    console.log("🟡 Raw response:", rawText);
+
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Payment server error: ${response.status} ${text}`);
+      throw new Error(`Payment server error: ${response.status} ${rawText}`);
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error("Payment server returned invalid JSON.");
+    }
+
+    console.log("🟢 Parsed response:", data);
 
     if (data?.url) {
       window.location.href = data.url;
     } else {
-      throw new Error("Failed to create Stripe session.");
+      throw new Error("Stripe checkout URL missing from response.");
     }
+
   } catch (err) {
-    console.error("Payment error:", err);
-    alert("Payment failed. See console for details.");
+    console.error("❌ Payment error:", err);
+    alert(`Payment failed: ${err.message || err}`);
     payNowBtn.disabled = false;
     paymentStatus.textContent = "";
   }
@@ -470,15 +506,14 @@ async function reserve(dateStr, slotKey, qty){
   const result = await runTransaction(r, current => {
     const existing = current || {};
     const booked = Number(existing.booked || 0);
-    const max = Number(existing.max ?? capacity);
+    const max = existing.max != null ? Number(existing.max) : Number(capacity);
 
     if (booked + qty > max) {
       return;
     }
 
     return {
-      ...existing,
-      max,
+      max: max,
       booked: booked + qty
     };
   });
@@ -487,7 +522,6 @@ async function reserve(dateStr, slotKey, qty){
     throw new Error("This time slot is fully booked. Please pick another slot.");
   }
 }
-
 /* COMPLETE AFTER PAYMENT */
 async function completeBookingAfterPayment() {
   if (bookingCompleted) return;
@@ -509,6 +543,7 @@ async function completeBookingAfterPayment() {
 
     await loadItemFromRTDB();
     await reserve(pending.date, pending.timeSlot, qty);
+    await fetchSlotsForDate(pending.date);
 
     const refDoc = await addDoc(collection(db, "bookings"), {
       userId: auth.currentUser.uid,
