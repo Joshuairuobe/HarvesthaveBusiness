@@ -223,6 +223,34 @@ const app = initializeApp({
 const db = getDatabase(app);
 const eventsList = document.getElementById("eventsList");
 
+function formatSlots(item){
+  let out = [];
+
+  if (item.weeklySlots) {
+    Object.values(item.weeklySlots).forEach(daySlots => {
+      Object.values(daySlots || {}).forEach(s => {
+        if (s?.enabled) out.push(`${s.start}–${s.end}`);
+      });
+    });
+  }
+
+  if (item.dateOverrides) {
+    Object.values(item.dateOverrides).forEach(dateSlots => {
+      Object.values(dateSlots || {}).forEach(s => {
+        if (s?.enabled) out.push(`${s.start}–${s.end}`);
+      });
+    });
+  }
+
+  if (!out.length && item.timeSlots) {
+    Object.values(item.timeSlots).forEach(s => {
+      if (s?.enabled) out.push(`${s.start}–${s.end}`);
+    });
+  }
+
+  return out.length ? [...new Set(out)].join(", ") : "Times TBA";
+}
+
 /* Load events from Realtime DB */
 const snap = await get(ref(db, "items"));
 
@@ -235,12 +263,7 @@ if (!snap.exists()) {
     .filter(([_, item]) => item.type === "event")
     .forEach(([id, event]) => {
 
-      const slots = event.timeSlots
-        ? Object.values(event.timeSlots)
-            .filter(s => s.enabled)
-            .map(s => `${s.start}–${s.end}`)
-            .join(", ")
-        : "Times TBA";
+     const slots = formatSlots(event);
 
       eventsList.innerHTML += `
         <div class="event-card">
