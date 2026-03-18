@@ -98,7 +98,15 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
         <option value="sat">Saturday</option>
         <option value="sun">Sunday</option>
       </select>
+<div class="row">
+  <input id="dayStartTime" type="time" placeholder="Day start">
+  <input id="dayEndTime" type="time" placeholder="Day end">
+</div>
 
+<div class="row">
+  <input id="slotMinutes" type="number" min="5" step="5" placeholder="Slot minutes e.g. 15">
+  <button id="generateDaySlotsBtn" type="button">Generate Slots For Selected Weekday</button>
+</div>
       <select id="slotPreset">
         <option value="">Add preset slot</option>
         <option value="10:00|13:00">Morning (10:00–13:00)</option>
@@ -131,7 +139,15 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
     <h4 style="margin-top:14px;">Date-specific slots (override)</h4>
 
     <input id="slotDate" type="date">
+<div class="row">
+  <input id="overrideStartTime" type="time" placeholder="Override start">
+  <input id="overrideEndTime" type="time" placeholder="Override end">
+</div>
 
+<div class="row">
+  <input id="overrideSlotMinutes" type="number" min="5" step="5" placeholder="Slot minutes">
+  <button id="generateDateSlotsBtn" type="button">Generate Slots For This Date</button>
+</div>
     <div class="row">
       <input id="dateStart" type="time" placeholder="Start">
       <input id="dateEnd" type="time" placeholder="End">
@@ -257,7 +273,10 @@ const paidBookingsResults = document.getElementById("paidBookingsResults");
 const customStart = document.getElementById("customStart");
 const customEnd = document.getElementById("customEnd");
 const addCustomSlot = document.getElementById("addCustomSlot");
-
+const dayStartTime = document.getElementById("dayStartTime");
+const dayEndTime = document.getElementById("dayEndTime");
+const slotMinutesEl = document.getElementById("slotMinutes");
+const generateDaySlotsBtn = document.getElementById("generateDaySlotsBtn");
 /* Date overrides UI */
 const slotDateEl = document.getElementById("slotDate");
 const dateStartEl = document.getElementById("dateStart");
@@ -265,7 +284,10 @@ const dateEndEl = document.getElementById("dateEnd");
 const addDateSlotBtn = document.getElementById("addDateSlotBtn");
 const clearDateSlotsBtn = document.getElementById("clearDateSlotsBtn");
 const dateSlotList = document.getElementById("dateSlotList");
-
+const overrideStartTime = document.getElementById("overrideStartTime");
+const overrideEndTime = document.getElementById("overrideEndTime");
+const overrideSlotMinutes = document.getElementById("overrideSlotMinutes");
+const generateDateSlotsBtn = document.getElementById("generateDateSlotsBtn");
 /* Helpers */
 const slug = (s) => String(s || "")
   .toLowerCase()
@@ -284,7 +306,26 @@ function ensureWeeklySlots(){
   if(!weeklySlots || typeof weeklySlots !== "object") weeklySlots = {};
   WEEK_KEYS.forEach(k => { if(!weeklySlots[k]) weeklySlots[k] = {}; });
 }
+function generateTimeSlots(start, end, minutes){
+  const slots = [];
+  const startDate = new Date(`2000-01-01T${start}:00`);
+  const endDate = new Date(`2000-01-01T${end}:00`);
 
+  let current = new Date(startDate);
+
+  while (current < endDate) {
+    const next = new Date(current.getTime() + minutes * 60000);
+    if (next > endDate) break;
+
+    const from = current.toTimeString().slice(0, 5);
+    const to = next.toTimeString().slice(0, 5);
+
+    slots.push({ key: `${from}-${to}`, start: from, end: to });
+    current = next;
+  }
+
+  return slots;
+}
 async function uploadToCloudinary(file){
   const form = new FormData();
   form.append("file", file);
@@ -379,7 +420,33 @@ addCustomSlot.onclick = () => {
   customEnd.value = "";
   renderWeeklySlots();
 };
+generateDaySlotsBtn.onclick = () => {
+  ensureWeeklySlots();
 
+  const dayKey = slotDayEl.value;
+  const start = dayStartTime.value;
+  const end = dayEndTime.value;
+  const minutes = Number(slotMinutesEl.value || 0);
+
+  if (!start || !end) return alert("Select start and end time");
+  if (start >= end) return alert("End time must be after start time");
+  if (!minutes || minutes < 5) return alert("Enter a valid slot length in minutes");
+
+  const generated = generateTimeSlots(start, end, minutes);
+  if (!generated.length) return alert("No slots could be generated");
+
+  weeklySlots[dayKey] = {};
+
+  generated.forEach(slot => {
+    weeklySlots[dayKey][slot.key] = {
+      start: slot.start,
+      end: slot.end,
+      enabled: true
+    };
+  });
+
+  renderWeeklySlots();
+};
 clearDayBtn.onclick = () => {
   ensureWeeklySlots();
   const dayKey = slotDayEl.value;
@@ -459,7 +526,33 @@ clearDateSlotsBtn.onclick = () => {
   delete dateOverrides[d];
   renderDateSlots();
 };
+generateDateSlotsBtn.onclick = () => {
+  const d = slotDateEl.value;
+  if (!d) return alert("Select a date first");
 
+  const start = overrideStartTime.value;
+  const end = overrideEndTime.value;
+  const minutes = Number(overrideSlotMinutes.value || 0);
+
+  if (!start || !end) return alert("Select start and end time");
+  if (start >= end) return alert("End time must be after start time");
+  if (!minutes || minutes < 5) return alert("Enter a valid slot length in minutes");
+
+  const generated = generateTimeSlots(start, end, minutes);
+  if (!generated.length) return alert("No slots could be generated");
+
+  dateOverrides[d] = {};
+
+  generated.forEach(slot => {
+    dateOverrides[d][slot.key] = {
+      start: slot.start,
+      end: slot.end,
+      enabled: true
+    };
+  });
+
+  renderDateSlots();
+};
 loginBtn.onclick = async () => {
   const email = emailEl.value.trim();
   const pass = passwordEl.value;
@@ -622,16 +715,19 @@ calendarDate.onchange = async () => {
         if (!dates?.[date]) return;
 
         html += `<h4>${itemId.replace(/_/g," ").toUpperCase()}</h4>`;
-        Object.entries(dates[date]).forEach(([slot, info]) => {
+       Object.entries(dates[date])
+  .sort(([a], [b]) => a.localeCompare(b))
+  .forEach(([slot, info]) => {
           const booked = Number(info?.booked || 0);
           const max = Number(info?.max || 0);
           const remaining = Math.max(0, max - booked);
-
+const percent = max ? Math.round((booked / max) * 100) : 0;
           html += `
             <div class="booking-card">
               <div><strong>⏱ ${slot}</strong></div>
               <div class="small">Booked: ${booked}/${max}</div>
               <div class="small">Remaining: ${remaining}</div>
+              <div class="small">Usage: ${percent}%</div>
             </div>
           `;
         });
@@ -670,6 +766,11 @@ calendarDate.onchange = async () => {
           <div class="small">People total: ${totalPeople}</div>
           <div class="small">Paid: £${b.totalPrice || 0}</div>
           <div class="small">Status: ${b.status || "unknown"}</div>
+          <div class="small">Created: ${
+  b.createdAt?.seconds
+    ? new Date(b.createdAt.seconds * 1000).toLocaleString()
+    : "—"
+}</div>
           <div class="small" style="opacity:.7">Booking ID: ${docSnap.id}</div>
         </div>
       `;
