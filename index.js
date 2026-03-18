@@ -26,8 +26,8 @@ app.post("/", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: "https://yourdomain.com/success.html",
-      cancel_url: "https://yourdomain.com/book-now.html",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
     });
 
     res.status(200).json({ url: session.url });
@@ -37,5 +37,3 @@ app.post("/", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-exports.createCheckoutSession = onRequest(app);
