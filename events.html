@@ -224,33 +224,13 @@ const db = getDatabase(app);
 const eventsList = document.getElementById("eventsList");
 
 function formatSlots(item){
-  let out = [];
+  const hasAnySlots =
+    (item.weeklySlots && Object.values(item.weeklySlots).some(day => Object.values(day || {}).some(s => s?.enabled))) ||
+    (item.dateOverrides && Object.values(item.dateOverrides).some(day => Object.values(day || {}).some(s => s?.enabled))) ||
+    (item.timeSlots && Object.values(item.timeSlots).some(s => s?.enabled));
 
-  if (item.weeklySlots) {
-    Object.values(item.weeklySlots).forEach(daySlots => {
-      Object.values(daySlots || {}).forEach(s => {
-        if (s?.enabled) out.push(`${s.start}–${s.end}`);
-      });
-    });
-  }
-
-  if (item.dateOverrides) {
-    Object.values(item.dateOverrides).forEach(dateSlots => {
-      Object.values(dateSlots || {}).forEach(s => {
-        if (s?.enabled) out.push(`${s.start}–${s.end}`);
-      });
-    });
-  }
-
-  if (!out.length && item.timeSlots) {
-    Object.values(item.timeSlots).forEach(s => {
-      if (s?.enabled) out.push(`${s.start}–${s.end}`);
-    });
-  }
-
-  return out.length ? [...new Set(out)].join(", ") : "Times TBA";
+  return hasAnySlots ? "Book now to view live availability" : "Times TBA";
 }
-
 /* Load events from Realtime DB */
 const snap = await get(ref(db, "items"));
 
