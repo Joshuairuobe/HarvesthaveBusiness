@@ -319,7 +319,11 @@ function weekdayKeyFromDate(dateStr){
   const day = new Date(dateStr + "T00:00:00").getDay();
   return ["sun","mon","tue","wed","thu","fri","sat"][day];
 }
-
+function isPastSlot(dateStr, startTime){
+  const now = new Date();
+  const slotStart = new Date(`${dateStr}T${startTime}:00`);
+  return slotStart <= now;
+}
 async function renderSlots() {
   timeEl.innerHTML = `<option value="">Select a date first</option>`;
 if (!dateEl.value) return;
@@ -366,6 +370,7 @@ timeEl.innerHTML = `<option value="">Select time slot</option>`;
   }
 
   for (const s of slotList) {
+    if (isPastSlot(dateStr, s.start)) continue;
     const snap = await get(ref(rtdb, `availability/${itemId}/${dateStr}/${s.slotKey}`));
     const booked = snap.exists() ? Number(snap.val().booked || 0) : 0;
     const max = snap.exists() && snap.val().max != null ? Number(snap.val().max) : capacity;
@@ -445,8 +450,9 @@ payNowBtn.onclick = async () => {
 
     /* ✅ STEP 3: PREPARE PAYMENT PAYLOAD */
     const payload = {
-      itemName,
-      amount: Math.round(total * 100),
+  itemName,
+  type,
+  amount: Math.round(total * 100),
       date: dateEl.value,
       timeSlot: timeEl.value,
       tickets: { adult: a, child: c, senior: s },
