@@ -247,9 +247,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
-  getDatabase, ref, get, runTransaction
+  getDatabase, ref, get, runTransaction, onValue, off
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
 /* INIT */
 const app = initializeApp({
   apiKey: "AIzaSyDjNcMWpJ8zO2j0Z4vH8GOFPHK2Tt8pOF4",
@@ -330,7 +329,7 @@ let capacity = 100;
 let slots = {};
 let bookingCompleted = false;
 let completedBookingData = null;
-
+let availabilityListenerRef = null;
 /* HELPERS */
 function showRecovery(message){
   recoveryBox.textContent = message;
@@ -494,23 +493,6 @@ await loadMyBookings();
   }
 
 
-  userLabel.textContent = `Logged in as ${u.email}`;
-  nameEl.value = profile.name || "";
-
-  await loadItemFromRTDB();
-
-  if (paymentStatusParam === "cancelled") {
-    paymentStatus.textContent = "";
-    showRecovery("Payment was cancelled. Your booking was not completed.");
-  }
-
-  if (bookingSuccessParam === "1") {
-    restoreSuccessFromLocal();
-  }
-
-  if (paymentStatusParam === "success" || returnedSessionId) {
-    await completeBookingAfterPayment();
-  }
 });
 
 /* Logout */
@@ -562,6 +544,7 @@ async function fetchSlotsForDate(dateStr){
 dateEl.onchange = async () => {
   timeEl.value = "";
   await fetchSlotsForDate(dateEl.value);
+  watchAvailabilityForDate(dateEl.value);
 };
 
 function weekdayKeyFromDate(dateStr){
@@ -840,6 +823,9 @@ async function completeBookingAfterPayment() {
       Number(pending.tickets?.senior || 0);
 
     await loadItemFromRTDB();
+    if (dateEl.value) {
+  watchAvailabilityForDate(dateEl.value);
+}
     await reserve(pending.date, pending.timeSlot, qty);
     await fetchSlotsForDate(pending.date);
 
@@ -899,7 +885,7 @@ window.downloadReceipt = ()=>{
 
   pdf.save("HarvestHavensReceipt.pdf");
 };
-bookAnotherBtn?.addEventListener("click", () => {
+bookAnotherBtn?.addEventListener("click", async () => {
   successMsg.classList.add("hidden");
   bookingForm.classList.remove("hidden");
 
@@ -909,6 +895,11 @@ bookAnotherBtn?.addEventListener("click", () => {
   seniorCount.value = "";
   paymentStatus.textContent = "";
   calc();
+
+  if (dateEl.value) {
+    await fetchSlotsForDate(dateEl.value);
+    watchAvailabilityForDate(dateEl.value);
+  }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -995,6 +986,20 @@ async function loadMyBookings() {
     console.error("Failed to load user bookings:", err);
     myBookingsList.innerHTML = "Could not load your bookings right now.";
   }
+}
+function watchAvailabilityForDate(dateStr) {
+  if (!dateStr) return;
+
+  if (availabilityListenerRef) {
+    off(availabilityListenerRef);
+    availabilityListenerRef = null;
+  }
+
+  availabilityListenerRef = ref(rtdb, `availability/${itemId}/${dateStr}`);
+
+  onValue(availabilityListenerRef, async () => {
+    await renderSlots();
+  });
 }
 </script>
 </body>
