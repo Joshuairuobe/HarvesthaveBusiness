@@ -146,6 +146,18 @@ button:hover{background:var(--green-dark)}
   font-size:12px;
   font-weight:700;
 }
+.homeBtn{
+  background:#eef3f0;
+  color:#2f6b3f;
+  width:auto;
+  padding:12px 16px;
+}
+.logoutBtn{
+  background:#eef3f0;
+  color:#2f6b3f;
+  width:auto;
+  padding:12px 16px;
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -165,9 +177,13 @@ button:hover{background:var(--green-dark)}
   <div id="dashboard">
 
     <div class="topBar">
-      <span id="userLabel" class="note"></span>
-      <button class="logoutBtn" id="logoutBtn" type="button">Logout</button>
-    </div>
+  <span id="userLabel" class="note"></span>
+
+  <div style="display:flex; gap:10px; align-items:center;">
+    <button class="homeBtn" id="homeBtn" type="button">Home</button>
+    <button class="logoutBtn" id="logoutBtn" type="button">Logout</button>
+  </div>
+</div>
 
     <form id="bookingForm">
       <input id="name" placeholder="Full name" required>
@@ -191,7 +207,7 @@ button:hover{background:var(--green-dark)}
       <div id="errorBox" class="errorBox hidden"></div>
     </form>
 
-    <div id="successMsg" class="success hidden">
+  <div id="successMsg" class="success hidden">
   Booking confirmed & paid ✅
   <div id="successDetails" class="note" style="margin-top:8px;"></div>
   <div id="qrTicket"></div>
@@ -200,6 +216,7 @@ button:hover{background:var(--green-dark)}
     <button type="button" onclick="downloadReceipt()">Download Receipt</button>
     <button type="button" id="bookAnotherBtn" class="secondaryBtn">Book Another Slot</button>
     <button type="button" id="viewBookingsBtn" class="secondaryBtn">View My Bookings</button>
+    <button type="button" id="homeBtnSuccess" class="secondaryBtn">Back Home</button>
   </div>
 </div>
 <div id="myBookingsCard" class="cardLike hidden">
@@ -291,7 +308,8 @@ const bookAnotherBtn = document.getElementById("bookAnotherBtn");
 const viewBookingsBtn = document.getElementById("viewBookingsBtn");
 const today = new Date().toISOString().split("T")[0];
 dateEl.min = today;
-
+const homeBtn = document.getElementById("homeBtn");
+const homeBtnSuccess = document.getElementById("homeBtnSuccess");
 /* UI TEXT */
 titleEl.textContent = itemName;
 subtitleEl.textContent = type === "event" ? "Event Booking" : "Attraction Booking";
@@ -425,7 +443,12 @@ async function findExistingBookingBySessionId(sessionId){
     ...first.data()
   };
 }
+function goHome(){
+  location.href = "events.html";
+}
 
+homeBtn?.addEventListener("click", goHome);
+homeBtnSuccess?.addEventListener("click", goHome);
 /* AUTH */
 onAuthStateChanged(auth, async (u) => {
   if (!u) return goLogin();
