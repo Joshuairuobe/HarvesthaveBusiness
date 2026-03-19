@@ -132,7 +132,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
   <div class="shell">
     <h1>Create your account</h1>
     <p>Email-only signup. We’ll send a verification email before you can book.</p>
-    
+   
 
     <form id="signupForm" novalidate>
       <input id="fullName" placeholder="Full name" autocomplete="name" required>
@@ -202,7 +202,7 @@ const loginLink = document.getElementById("loginLink");
 
 loginLink.href = `login.html?return=${encodeURIComponent(returnUrl)}`;
 
-let createdUser = null;
+let lastCreatedUser = null;
 
 function showMessage(text, type = ""){
   msg.style.display = "block";
@@ -264,17 +264,18 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
 
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    createdUser = cred.user;
+    lastCreatedUser = cred.user;
 
     await updateProfile(cred.user, {
       displayName: name
     });
 
     await setDoc(doc(db, "users", cred.user.uid), {
-  name,
-  email,
-  createdAt: serverTimestamp()
-});
+      name,
+      email,
+      createdAt: serverTimestamp()
+    });
+
     await sendEmailVerification(cred.user, {
       url: `${location.origin}${location.pathname.replace("signup.html", "login.html")}?return=${encodeURIComponent(returnUrl)}`
     });
@@ -306,47 +307,24 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
 });
 
 resendBtn.addEventListener("click", async () => {
-  const name = fullNameEl.value.trim();
-  const email = emailEl.value.trim().toLowerCase();
-  const password = passEl.value;
-
   clearMessage();
 
-  if (!email || !password || !name) {
-    return showMessage("Fill in your name, email and password first.", "error");
+  if (!lastCreatedUser) {
+    return showMessage("Create your account first before resending verification.", "error");
   }
 
   resendBtn.disabled = true;
   resendBtn.textContent = "Sending...";
 
   try {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    createdUser = cred.user;
-
-    await updateProfile(cred.user, { displayName: name });
-
-    await setDoc(doc(db, "users", cred.user.uid), {
-      name,
-      email,
-      phone: "",
-      phoneVerified: true,
-      emailVerified: false,
-      createdAt: serverTimestamp()
-    }, { merge: true });
-
-    await sendEmailVerification(cred.user, {
+    await sendEmailVerification(lastCreatedUser, {
       url: `${location.origin}${location.pathname.replace("signup.html", "login.html")}?return=${encodeURIComponent(returnUrl)}`
     });
 
-    await signOut(auth);
-
-    showMessage("Verification email sent. Check your inbox and then sign in.", "success");
+    showMessage("Verification email sent again. Check your inbox.", "success");
   } catch (e) {
-    if (e?.code === "auth/email-already-in-use") {
-      showMessage("That account already exists. Try signing in instead.", "error");
-    } else {
-      showMessage(e?.message || "Could not resend verification email.", "error");
-    }
+    console.error("Resend failed:", e);
+    showMessage(e?.message || "Could not resend verification email.", "error");
   } finally {
     resendBtn.disabled = false;
     resendBtn.textContent = "Resend Verification Email";
