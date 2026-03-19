@@ -92,9 +92,26 @@ button:hover{background:var(--green-dark)}
   background:#eef3f0;
   color:#2f6b3f;
 }
+.warningBox{
+  margin-top:14px;
+  padding:12px;
+  border-radius:12px;
+  background:#fff8e8;
+  border:1px solid #f0d8a8;
+  color:#6b5420;
+  font-size:14px;
+}
+.errorBox{
+  margin-top:14px;
+  padding:12px;
+  border-radius:12px;
+  background:#fff1f1;
+  border:1px solid #f1c8c8;
+  color:#8b1f1f;
+  font-size:14px;
+}
 </style>
 
-<!-- QR + PDF libs -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -103,13 +120,12 @@ button:hover{background:var(--green-dark)}
 <div class="container">
 
   <div class="hero">
-    <img id="eventImage" src="haven.jpg">
+    <img id="eventImage" src="haven.jpg" alt="Booking image">
   </div>
 
   <h2 id="title">Booking</h2>
   <p id="subtitle" class="note"></p>
 
-  <!-- DASHBOARD -->
   <div id="dashboard">
 
     <div class="topBar">
@@ -118,7 +134,6 @@ button:hover{background:var(--green-dark)}
     </div>
 
     <form id="bookingForm">
-      <!-- ✅ You can keep this name input if you want; we will prefill from profile -->
       <input id="name" placeholder="Full name" required>
       <input id="date" type="date" required>
 
@@ -134,15 +149,15 @@ button:hover{background:var(--green-dark)}
       <div id="priceNote" class="note"></div>
 
       <h4>Secure Payment</h4>
-      <button type="button" id="payNowBtn" class="payBtn card">
-  Pay Securely
-</button>
+      <button type="button" id="payNowBtn" class="payBtn card">Pay Securely</button>
       <div id="paymentStatus" class="note"></div>
-
+      <div id="recoveryBox" class="warningBox hidden"></div>
+      <div id="errorBox" class="errorBox hidden"></div>
     </form>
 
     <div id="successMsg" class="success hidden">
       Booking confirmed & paid ✅
+      <div id="successDetails" class="note" style="margin-top:8px;"></div>
       <div id="qrTicket"></div>
       <button type="button" onclick="downloadReceipt()">Download Receipt</button>
     </div>
@@ -157,7 +172,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import {
-  getFirestore, addDoc, collection, serverTimestamp, doc, getDoc
+  getFirestore,
+  addDoc,
+  collection,
+  serverTimestamp,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
@@ -182,6 +205,8 @@ const itemName = p.get("item");
 const type = p.get("type");
 const paymentStatusParam = p.get("payment");
 const returnedSessionId = p.get("session_id");
+const bookingSuccessParam = p.get("bookingSuccess");
+const bookingIdParam = p.get("bookingId");
 
 if (!itemName || !type) {
   alert("Invalid booking link");
@@ -199,9 +224,12 @@ const pricePreview = document.getElementById("pricePreview");
 const priceNote = document.getElementById("priceNote");
 const paymentStatus = document.getElementById("paymentStatus");
 const successMsg = document.getElementById("successMsg");
+const successDetails = document.getElementById("successDetails");
 const qrBox = document.getElementById("qrTicket");
 const logoutBtn = document.getElementById("logoutBtn");
 const userLabel = document.getElementById("userLabel");
+const recoveryBox = document.getElementById("recoveryBox");
+const errorBox = document.getElementById("errorBox");
 
 const dateEl = document.getElementById("date");
 const bookingForm = document.getElementById("bookingForm");
@@ -211,8 +239,10 @@ const adultCount = document.getElementById("adultCount");
 const childCount = document.getElementById("childCount");
 const seniorCount = document.getElementById("seniorCount");
 const payNowBtn = document.getElementById("payNowBtn");
+
 const today = new Date().toISOString().split("T")[0];
 dateEl.min = today;
+
 /* UI TEXT */
 titleEl.textContent = itemName;
 subtitleEl.textContent = type === "event" ? "Event Booking" : "Attraction Booking";
@@ -223,35 +253,148 @@ function goLogin(){
   location.href = `login.html?return=${returnUrl}`;
 }
 
+/* STORAGE KEYS */
+const PENDING_KEY = "hh_pendingBooking";
+const COMPLETED_KEY = "hh_completedBooking";
+
 /* STATE */
 let prices = { adult:15, child:8, senior:10 };
 let capacity = 100;
 let slots = {};
 let bookingCompleted = false;
+let completedBookingData = null;
+
+/* HELPERS */
+function showRecovery(message){
+  recoveryBox.textContent = message;
+  recoveryBox.classList.remove("hidden");
+}
+function hideRecovery(){
+  recoveryBox.textContent = "";
+  recoveryBox.classList.add("hidden");
+}
+function showError(message){
+  errorBox.textContent = message;
+  errorBox.classList.remove("hidden");
+}
+function hideError(){
+  errorBox.textContent = "";
+  errorBox.classList.add("hidden");
+}
+function savePendingBooking(data){
+  localStorage.setItem(PENDING_KEY, JSON.stringify(data));
+}
+function getPendingBooking(){
+  try{
+    const raw = localStorage.getItem(PENDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch{
+    return null;
+  }
+}
+function clearPendingBooking(){
+  localStorage.removeItem(PENDING_KEY);
+}
+function saveCompletedBooking(data){
+  completedBookingData = data;
+  localStorage.setItem(COMPLETED_KEY, JSON.stringify(data));
+}
+function getCompletedBooking(){
+  try{
+    if (completedBookingData) return completedBookingData;
+    const raw = localStorage.getItem(COMPLETED_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch{
+    return null;
+  }
+}
+function formatCompletedCreatedAt(createdAt){
+  if (!createdAt) return "—";
+  if (typeof createdAt === "string") return createdAt;
+  return "—";
+}
+function renderSuccessUI(bookingId, bookingData){
+  bookingCompleted = true;
+  completedBookingData = {
+    ...bookingData,
+    bookingId
+  };
+
+  saveCompletedBooking(completedBookingData);
+
+  bookingForm.classList.add("hidden");
+  successMsg.classList.remove("hidden");
+  paymentStatus.textContent = "";
+  hideRecovery();
+  hideError();
+
+  const details = [
+    bookingData?.customerName ? `Name: ${bookingData.customerName}` : "",
+    bookingData?.date ? `Date: ${bookingData.date}` : "",
+    bookingData?.timeSlot ? `Time: ${bookingData.timeSlot}` : "",
+    bookingData?.totalPrice != null ? `Paid: £${bookingData.totalPrice}` : "",
+    bookingId ? `Booking ID: ${bookingId}` : ""
+  ].filter(Boolean).join(" • ");
+
+  successDetails.textContent = details;
+
+  qrBox.innerHTML = "";
+  new QRCode(qrBox, {
+    text: `BOOKING:${bookingId || "UNKNOWN"}`,
+    width: 120,
+    height: 120
+  });
+}
+function restoreSuccessFromLocal(){
+  const saved = getCompletedBooking();
+  if (!saved) return false;
+
+  const sameItem = saved.itemId === itemId;
+  if (!sameItem) return false;
+
+  renderSuccessUI(saved.bookingId || bookingIdParam || "UNKNOWN", saved);
+  return true;
+}
+async function findExistingBookingBySessionId(sessionId){
+  if (!sessionId) return null;
+
+  const q = query(
+    collection(db, "bookings"),
+    where("stripeSessionId", "==", sessionId)
+  );
+
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+
+  const first = snap.docs[0];
+  return {
+    id: first.id,
+    ...first.data()
+  };
+}
 
 /* AUTH */
 onAuthStateChanged(auth, async (u) => {
-  if(!u) return goLogin();
+  if (!u) return goLogin();
 
-  if(u.email === "harvesthaven10@harvesthaven.com"){
+  if ((u.email || "").toLowerCase() === "harvesthaven10@harvesthaven.com") {
     alert("Admin accounts cannot make bookings.");
     location.href = "admin.html";
     return;
   }
 
-  if(!u.emailVerified){
+  if (!u.emailVerified) {
     alert("Please verify your email first.");
-    await signOut(auth);
     return goLogin();
   }
 
   const userDoc = await getDoc(doc(db, "users", u.uid));
   const profile = userDoc.exists() ? userDoc.data() : null;
 
-  if(!profile || !profile.name || !profile.phone || profile.phoneVerified !== true){
+  if (!profile || !profile.name) {
     alert("Your account setup is incomplete. Please complete sign up.");
-    await signOut(auth);
-    return location.href = `signup.html?return=${encodeURIComponent(location.href)}`;
+    location.href = `signup.html?return=${encodeURIComponent(location.href)}`;
+    return;
   }
 
   userLabel.textContent = `Logged in as ${u.email}`;
@@ -259,7 +402,35 @@ onAuthStateChanged(auth, async (u) => {
 
   await loadItemFromRTDB();
 
-  /* if user returned from Stripe success */
+  if (paymentStatusParam === "cancelled") {
+    paymentStatus.textContent = "";
+    showRecovery("Payment was cancelled. Your booking was not completed.");
+    payNowBtn.disabled = false;
+  }
+
+  if (bookingSuccessParam === "1") {
+    restoreSuccessFromLocal();
+  }
+
+  if (paymentStatusParam === "success" || returnedSessionId) {
+    await completeBookingAfterPayment();
+  }
+
+
+  userLabel.textContent = `Logged in as ${u.email}`;
+  nameEl.value = profile.name || "";
+
+  await loadItemFromRTDB();
+
+  if (paymentStatusParam === "cancelled") {
+    paymentStatus.textContent = "";
+    showRecovery("Payment was cancelled. Your booking was not completed.");
+  }
+
+  if (bookingSuccessParam === "1") {
+    restoreSuccessFromLocal();
+  }
+
   if (paymentStatusParam === "success" || returnedSessionId) {
     await completeBookingAfterPayment();
   }
@@ -315,24 +486,26 @@ dateEl.onchange = async () => {
   timeEl.value = "";
   await fetchSlotsForDate(dateEl.value);
 };
+
 function weekdayKeyFromDate(dateStr){
   const day = new Date(dateStr + "T00:00:00").getDay();
   return ["sun","mon","tue","wed","thu","fri","sat"][day];
 }
+
 function isPastSlot(dateStr, startTime){
   const now = new Date();
-
   const [year, month, day] = dateStr.split("-").map(Number);
   const [hour, minute] = startTime.split(":").map(Number);
-
   const slotStart = new Date(year, month - 1, day, hour, minute, 0);
-
   return slotStart <= now;
 }
+
 async function renderSlots() {
   timeEl.innerHTML = `<option value="">Select a date first</option>`;
-if (!dateEl.value) return;
-timeEl.innerHTML = `<option value="">Select time slot</option>`;
+  if (!dateEl.value) return;
+
+  timeEl.innerHTML = `<option value="">Select time slot</option>`;
+
   const dateStr = dateEl.value;
   const dayKey = weekdayKeyFromDate(dateStr);
   const slotList = [];
@@ -376,6 +549,7 @@ timeEl.innerHTML = `<option value="">Select time slot</option>`;
 
   for (const s of slotList) {
     if (isPastSlot(dateStr, s.start)) continue;
+
     const snap = await get(ref(rtdb, `availability/${itemId}/${dateStr}/${s.slotKey}`));
     const booked = snap.exists() ? Number(snap.val().booked || 0) : 0;
     const max = snap.exists() && snap.val().max != null ? Number(snap.val().max) : capacity;
@@ -409,6 +583,9 @@ adultCount.oninput = childCount.oninput = seniorCount.oninput = calc;
 
 /* START STRIPE */
 payNowBtn.onclick = async () => {
+  hideRecovery();
+  hideError();
+
   const { total, qty, a, c, s } = calc();
 
   if (qty > capacity) {
@@ -424,7 +601,6 @@ payNowBtn.onclick = async () => {
   paymentStatus.textContent = "Redirecting to secure payment…";
 
   try {
-    /* ✅ STEP 1: CHECK AVAILABILITY SAFELY */
     const slotSnap = await get(ref(rtdb, `availability/${itemId}/${dateEl.value}/${timeEl.value}`));
 
     if (slotSnap.exists()) {
@@ -439,7 +615,6 @@ payNowBtn.onclick = async () => {
       }
     }
 
-    /* ✅ STEP 2: SAVE TEMP BOOKING */
     const pendingBooking = {
       itemId,
       itemName,
@@ -448,27 +623,28 @@ payNowBtn.onclick = async () => {
       date: dateEl.value,
       timeSlot: timeEl.value,
       tickets: { adult: a, child: c, senior: s },
-      totalPrice: total
+      totalPrice: total,
+      createdAtLocal: new Date().toISOString(),
+      userEmail: auth.currentUser?.email || "",
+      userId: auth.currentUser?.uid || ""
     };
 
-    localStorage.setItem("pendingBooking", JSON.stringify(pendingBooking));
+    savePendingBooking(pendingBooking);
 
-    /* ✅ STEP 3: PREPARE PAYMENT PAYLOAD */
     const payload = {
-  itemName,
-  type,
-  amount: Math.round(total * 100),
+      itemName,
+      type,
+      amount: Math.round(total * 100),
       date: dateEl.value,
       timeSlot: timeEl.value,
       tickets: { adult: a, child: c, senior: s },
       userEmail: auth.currentUser?.email || "unknown",
-      successUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=success`,
+      successUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${location.origin}${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&payment=cancelled`
     };
 
-    console.log("🔵 Sending payment payload:", payload);
+    console.log("Sending payment payload:", payload);
 
-    /* ✅ STEP 4: CALL PAYMENT SERVER */
     const response = await fetch(
       "https://createcheckoutsession-6fgozcf3nq-uc.a.run.app",
       {
@@ -478,10 +654,8 @@ payNowBtn.onclick = async () => {
       }
     );
 
-    console.log("🟡 Response status:", response.status);
-
     const rawText = await response.text();
-    console.log("🟡 Raw response:", rawText);
+    console.log("Payment server response:", rawText);
 
     if (!response.ok) {
       throw new Error(`Payment server error: ${response.status} ${rawText}`);
@@ -494,8 +668,6 @@ payNowBtn.onclick = async () => {
       throw new Error("Payment server returned invalid JSON.");
     }
 
-    console.log("🟢 Parsed response:", data);
-
     if (data?.url) {
       window.location.href = data.url;
     } else {
@@ -503,10 +675,11 @@ payNowBtn.onclick = async () => {
     }
 
   } catch (err) {
-    console.error("❌ Payment error:", err);
+    console.error("Payment error:", err);
     alert(`Payment failed: ${err.message || err}`);
     payNowBtn.disabled = false;
     paymentStatus.textContent = "";
+    showError(err.message || "Payment could not be started.");
   }
 };
 
@@ -533,24 +706,61 @@ async function reserve(dateStr, slotKey, qty){
     throw new Error("This time slot is fully booked. Please pick another slot.");
   }
 }
+
 /* COMPLETE AFTER PAYMENT */
 async function completeBookingAfterPayment() {
   if (bookingCompleted) return;
 
-  const raw = localStorage.getItem("pendingBooking");
-  if (!raw) {
-    paymentStatus.textContent = "Payment returned, but no pending booking was found.";
-    return;
-  }
-
-  const pending = JSON.parse(raw);
-  const qty =
-    Number(pending.tickets?.adult || 0) +
-    Number(pending.tickets?.child || 0) +
-    Number(pending.tickets?.senior || 0);
+  hideRecovery();
+  hideError();
 
   try {
     paymentStatus.textContent = "Finalising your booking…";
+
+    if (returnedSessionId) {
+      const existing = await findExistingBookingBySessionId(returnedSessionId);
+      if (existing) {
+        clearPendingBooking();
+        renderSuccessUI(existing.id, {
+          customerName: existing.customerName,
+          itemId: existing.itemId,
+          itemName: existing.itemName,
+          type: existing.type,
+          date: existing.date,
+          timeSlot: existing.timeSlot,
+          tickets: existing.tickets,
+          totalPrice: existing.totalPrice,
+          stripeSessionId: existing.stripeSessionId
+        });
+
+        history.replaceState(
+          {},
+          "",
+          `${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&bookingSuccess=1&bookingId=${encodeURIComponent(existing.id)}`
+        );
+        return;
+      }
+    }
+
+    const pending = getPendingBooking();
+    if (!pending) {
+      paymentStatus.textContent = "";
+      showRecovery("Payment returned, but this browser could not find the pending booking details. If payment succeeded, check Stripe and your Firestore bookings collection, or complete booking confirmation via webhook.");
+      payNowBtn.disabled = false;
+      return;
+    }
+
+    if (pending.itemId !== itemId) {
+      paymentStatus.textContent = "";
+      showRecovery("A pending booking was found, but it does not match this item.");
+      payNowBtn.disabled = false;
+      return;
+    }
+
+    const qty =
+      Number(pending.tickets?.adult || 0) +
+      Number(pending.tickets?.child || 0) +
+      Number(pending.tickets?.senior || 0);
 
     await loadItemFromRTDB();
     await reserve(pending.date, pending.timeSlot, qty);
@@ -558,6 +768,7 @@ async function completeBookingAfterPayment() {
 
     const refDoc = await addDoc(collection(db, "bookings"), {
       userId: auth.currentUser.uid,
+      userEmail: auth.currentUser.email || "",
       customerName: pending.customerName,
       itemId: pending.itemId,
       itemName: pending.itemName,
@@ -571,38 +782,44 @@ async function completeBookingAfterPayment() {
       createdAt: serverTimestamp()
     });
 
-    bookingCompleted = true;
-    localStorage.removeItem("pendingBooking");
+    clearPendingBooking();
 
-    bookingForm.classList.add("hidden");
-    successMsg.classList.remove("hidden");
-    paymentStatus.textContent = "";
-
-    qrBox.innerHTML = "";
-    new QRCode(qrBox, {
-      text: `BOOKING:${refDoc.id}`,
-      width: 120,
-      height: 120
+    renderSuccessUI(refDoc.id, {
+      ...pending,
+      stripeSessionId: returnedSessionId || null
     });
 
-    history.replaceState({}, "", `${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&bookingSuccess=1`);
+    history.replaceState(
+      {},
+      "",
+      `${location.pathname}?item=${encodeURIComponent(itemName)}&type=${encodeURIComponent(type)}&bookingSuccess=1&bookingId=${encodeURIComponent(refDoc.id)}`
+    );
+
   } catch (err) {
-    console.error(err);
+    console.error("Booking finalisation failed:", err);
     paymentStatus.textContent = "";
+    payNowBtn.disabled = false;
+    showError(err.message || "Booking finalisation failed");
     alert(err.message || "Booking finalisation failed");
   }
 }
 
 /* PDF */
 window.downloadReceipt = ()=>{
+  const receipt = getCompletedBooking();
+
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF();
-  pdf.text("Harvest Havens Farm",20,20);
-  pdf.text(`Item: ${itemName}`,20,40);
-  pdf.text(`Date: ${dateEl.value || ""}`,20,50);
-  pdf.text(`Time: ${timeEl.value || ""}`,20,60);
-  pdf.text(`Total Paid: £${pricePreview.textContent.replace("Total: £","")}`,20,80);
-  pdf.text("Status: PAID",20,95);
+
+  pdf.text("Harvest Havens Farm", 20, 20);
+  pdf.text(`Item: ${receipt?.itemName || itemName || ""}`, 20, 40);
+  pdf.text(`Name: ${receipt?.customerName || nameEl.value || ""}`, 20, 50);
+  pdf.text(`Date: ${receipt?.date || dateEl.value || ""}`, 20, 60);
+  pdf.text(`Time: ${receipt?.timeSlot || timeEl.value || ""}`, 20, 70);
+  pdf.text(`Total Paid: £${receipt?.totalPrice ?? pricePreview.textContent.replace("Total: £","")}`, 20, 85);
+  pdf.text(`Booking ID: ${receipt?.bookingId || bookingIdParam || "—"}`, 20, 95);
+  pdf.text("Status: PAID", 20, 105);
+
   pdf.save("HarvestHavensReceipt.pdf");
 };
 </script>
