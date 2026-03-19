@@ -110,6 +110,42 @@ button:hover{background:var(--green-dark)}
   color:#8b1f1f;
   font-size:14px;
 }
+.secondaryBtn{
+  background:#eef3f0;
+  color:#2f6b3f;
+  border:1px solid var(--border);
+}
+.secondaryBtn:hover{
+  background:#e4ece8;
+}
+.cardLike{
+  margin-top:18px;
+  padding:16px;
+  border-radius:16px;
+  background:#fbfdfc;
+  border:1px solid var(--border);
+}
+.myBookingItem{
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  margin-top:10px;
+  background:#fff;
+}
+.myBookingItem strong{
+  display:block;
+  margin-bottom:6px;
+}
+.bookingTag{
+  display:inline-block;
+  margin-top:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:#eef3f0;
+  color:#2f6b3f;
+  font-size:12px;
+  font-weight:700;
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -156,12 +192,21 @@ button:hover{background:var(--green-dark)}
     </form>
 
     <div id="successMsg" class="success hidden">
-      Booking confirmed & paid ✅
-      <div id="successDetails" class="note" style="margin-top:8px;"></div>
-      <div id="qrTicket"></div>
-      <button type="button" onclick="downloadReceipt()">Download Receipt</button>
-    </div>
+  Booking confirmed & paid ✅
+  <div id="successDetails" class="note" style="margin-top:8px;"></div>
+  <div id="qrTicket"></div>
 
+  <div style="display:grid;gap:10px;margin-top:14px;">
+    <button type="button" onclick="downloadReceipt()">Download Receipt</button>
+    <button type="button" id="bookAnotherBtn" class="secondaryBtn">Book Another Slot</button>
+    <button type="button" id="viewBookingsBtn" class="secondaryBtn">View My Bookings</button>
+  </div>
+</div>
+<div id="myBookingsCard" class="cardLike hidden">
+  <h3 style="margin:0 0 8px 0;">My Bookings</h3>
+  <p class="note" style="margin-top:0;">Your upcoming and previous bookings.</p>
+  <div id="myBookingsList" class="note">Loading…</div>
+</div>
   </div>
 </div>
 
@@ -180,7 +225,8 @@ import {
   getDoc,
   getDocs,
   query,
-  where
+  where,
+  orderBy
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
@@ -239,7 +285,10 @@ const adultCount = document.getElementById("adultCount");
 const childCount = document.getElementById("childCount");
 const seniorCount = document.getElementById("seniorCount");
 const payNowBtn = document.getElementById("payNowBtn");
-
+const myBookingsCard = document.getElementById("myBookingsCard");
+const myBookingsList = document.getElementById("myBookingsList");
+const bookAnotherBtn = document.getElementById("bookAnotherBtn");
+const viewBookingsBtn = document.getElementById("viewBookingsBtn");
 const today = new Date().toISOString().split("T")[0];
 dateEl.min = today;
 
@@ -343,7 +392,11 @@ function renderSuccessUI(bookingId, bookingData){
     text: `BOOKING:${bookingId || "UNKNOWN"}`,
     width: 120,
     height: 120
+    
+
   });
+  myBookingsCard.classList.remove("hidden");
+  loadMyBookings();
 }
 function restoreSuccessFromLocal(){
   const saved = getCompletedBooking();
@@ -401,7 +454,8 @@ onAuthStateChanged(auth, async (u) => {
   nameEl.value = profile.name || "";
 
   await loadItemFromRTDB();
-
+myBookingsCard.classList.remove("hidden");
+await loadMyBookings();
   if (paymentStatusParam === "cancelled") {
     paymentStatus.textContent = "";
     showRecovery("Payment was cancelled. Your booking was not completed.");
@@ -822,6 +876,103 @@ window.downloadReceipt = ()=>{
 
   pdf.save("HarvestHavensReceipt.pdf");
 };
+bookAnotherBtn?.addEventListener("click", () => {
+  successMsg.classList.add("hidden");
+  bookingForm.classList.remove("hidden");
+
+  timeEl.value = "";
+  adultCount.value = "";
+  childCount.value = "";
+  seniorCount.value = "";
+  paymentStatus.textContent = "";
+  calc();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+viewBookingsBtn?.addEventListener("click", async () => {
+  myBookingsCard.classList.remove("hidden");
+  await loadMyBookings();
+  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+});
+function isUpcomingBooking(dateStr, timeSlot) {
+  if (!dateStr) return false;
+
+  const startTime = (timeSlot || "").split("-")[0] || "00:00";
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = startTime.split(":").map(Number);
+
+  const bookingDate = new Date(year, month - 1, day, hour || 0, minute || 0, 0);
+  return bookingDate >= new Date();
+}
+
+async function loadMyBookings() {
+  if (!auth.currentUser) {
+    myBookingsList.innerHTML = "Please sign in to view your bookings.";
+    return;
+  }
+
+  myBookingsList.innerHTML = "Loading…";
+
+  try {
+    const q = query(
+      collection(db, "bookings"),
+      where("userId", "==", auth.currentUser.uid)
+    );
+
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      myBookingsList.innerHTML = "You have no bookings yet.";
+      return;
+    }
+
+    const bookings = snap.docs
+      .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+      .sort((a, b) => {
+        const aDate = `${a.date || ""} ${a.timeSlot || ""}`;
+        const bDate = `${b.date || ""} ${b.timeSlot || ""}`;
+        return aDate.localeCompare(bDate);
+      });
+
+    const upcoming = bookings.filter(b => isUpcomingBooking(b.date, b.timeSlot));
+    const past = bookings.filter(b => !isUpcomingBooking(b.date, b.timeSlot));
+
+    let html = "";
+
+    if (upcoming.length) {
+      html += `<h4 style="margin:12px 0 6px 0;">Upcoming</h4>`;
+      html += upcoming.map(b => `
+        <div class="myBookingItem">
+          <strong>${b.itemName || "Booking"}</strong>
+          <div>Date: ${b.date || "—"}</div>
+          <div>Time: ${b.timeSlot || "—"}</div>
+          <div>Total paid: £${b.totalPrice || 0}</div>
+          <div>Status: ${b.status || "paid"}</div>
+          <div class="bookingTag">Upcoming</div>
+        </div>
+      `).join("");
+    }
+
+    if (past.length) {
+      html += `<h4 style="margin:14px 0 6px 0;">Previous</h4>`;
+      html += past.map(b => `
+        <div class="myBookingItem">
+          <strong>${b.itemName || "Booking"}</strong>
+          <div>Date: ${b.date || "—"}</div>
+          <div>Time: ${b.timeSlot || "—"}</div>
+          <div>Total paid: £${b.totalPrice || 0}</div>
+          <div>Status: ${b.status || "paid"}</div>
+        </div>
+      `).join("");
+    }
+
+    myBookingsList.innerHTML = html || "You have no bookings yet.";
+  } catch (err) {
+    console.error("Failed to load user bookings:", err);
+    myBookingsList.innerHTML = "Could not load your bookings right now.";
+  }
+}
 </script>
 </body>
 </html>
